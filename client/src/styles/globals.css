@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* ------------------------------------------------------------------------- *
+ *  Theme tokens
+ *  Each mode sets the full palette as CSS custom properties. Tailwind's
+ *  `swoono` color namespace is plumbed through these, so utility classes
+ *  like `bg-swoono-accent/20` update automatically when the theme class on
+ *  <html> changes.
+ *
+ *  RGB triplets (no commas) so Tailwind's <alpha-value> syntax works.
+ * ------------------------------------------------------------------------- */
+
+/* Default palette = neutral, so elements outside ThemeProvider still render */
+:root,
+.theme-neutral {
+  --swoono-bg: 10 14 24;
+  --swoono-bg2: 18 22 36;
+  --swoono-ink: 234 240 250;
+  --swoono-dim: 140 150 180;
+  --swoono-accent: 120 180 240;
+  --swoono-accent2: 160 180 220;
+  --swoono-glow: 180 210 240;
+}
+
+.theme-guy {
+  --swoono-bg: 8 10 18;
+  --swoono-bg2: 14 18 30;
+  --swoono-ink: 235 245 255;
+  --swoono-dim: 130 150 180;
+  --swoono-accent: 0 220 255;
+  --swoono-accent2: 60 130 255;
+  --swoono-glow: 120 210 255;
+}
+
+.theme-girl {
+  --swoono-bg: 22 10 28;
+  --swoono-bg2: 32 14 40;
+  --swoono-ink: 252 240 250;
+  --swoono-dim: 180 150 200;
+  --swoono-accent: 255 100 170;
+  --swoono-accent2: 200 100 255;
+  --swoono-glow: 255 180 220;
+}
+
+body {
+  background: rgb(var(--swoono-bg));
+  color: rgb(var(--swoono-ink));
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+  font-family: Inter, system-ui, sans-serif;
+  transition: background-color 0.6s ease;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .glass {
+    background: rgb(255 255 255 / 0.035);
+    backdrop-filter: blur(14px) saturate(130%);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    border: 1px solid rgb(255 255 255 / 0.08);
+  }
+  .glass-strong {
+    background: rgb(255 255 255 / 0.06);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    border: 1px solid rgb(255 255 255 / 0.1);
+  }
+  /* Guy mode stiffens the glass slightly for a harder panel edge. */
+  .theme-guy .glass,
+  .theme-guy .glass-strong {
+    border-color: rgb(var(--swoono-accent) / 0.18);
+  }
+  /* Girl mode softens panel edges for that dreamy layered feel. */
+  .theme-girl .glass,
+  .theme-girl .glass-strong {
+    border-color: rgb(var(--swoono-glow) / 0.18);
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.08);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 0.15);
+}

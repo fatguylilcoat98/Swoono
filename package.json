@@ -1,0 +1,19 @@
+{
+  "name": "swoono",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A synced shared room for two people",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev:client": "npm run dev -w client",
+    "dev:server": "npm run dev -w server",
+    "build": "npm run build -w client && npm run build -w server",
+    "start": "npm start -w server"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
