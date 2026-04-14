@@ -2,6 +2,21 @@ import express from "express";
 import http from "http";
 import path from "path";
 import { Server, Socket } from "socket.io";
+import {
+  isDbConfigured,
+  joinRoom as dbJoinRoom,
+  touchRoom as dbTouchRoom,
+  listNotes as dbListNotes,
+  insertNote as dbInsertNote,
+  recordPoints as dbRecordPoints,
+  recordGame as dbRecordGame,
+  logRewardEvent as dbLogRewardEvent,
+  updatePeerLocation as dbUpdatePeerLocation,
+  listPeerLocations as dbListPeerLocations,
+  haversineMeters,
+} from "./db";
+
+const USE_DB = isDbConfigured();
 
 // Types kept in sync with client/src/lib/types.ts
 type Peer = { clientId: string; name: string };
@@ -57,10 +72,54 @@ type HangmanState = {
   startedAt: number;
 };
 
-type ActiveGame = TicTacToeState | ConnectFourState | HangmanState;
+// --- Battleship (Neon Fleet) ---
+// Internal state keeps both fleets; per-player views redact the opponent.
+
+type BattleshipShipData = {
+  name: string;
+  len: number;
+  x: number;
+  y: number;
+  vertical: boolean;
+  hits: number;
+  hitPositions: { x: number; y: number }[];
+};
+
+type BattleshipShot = {
+  x: number;
+  y: number;
+  hit: boolean;
+  sunkShipName: string | null;
+};
+
+type BattleshipPlayerSlot = {
+  clientId: string;
+  name: string;
+  ships: BattleshipShipData[];
+  ready: boolean;
+};
+
+type BattleshipInternal = {
+  gameId: "battleship";
+  phase: "placement" | "battle" | "done";
+  players: [BattleshipPlayerSlot, BattleshipPlayerSlot];
+  /** shotHistory[i] = shots fired BY player i AT player (1-i) */
+  shotHistory: [BattleshipShot[], BattleshipShot[]];
+  turnIdx: 0 | 1;
+  winnerIdx: 0 | 1 | null;
+  startedAt: number;
+};
+
+type ActiveGame =
+  | TicTacToeState
+  | ConnectFourState
+  | HangmanState
+  | BattleshipInternal;
 
 type Room = {
   code: string;
+  /** Locked to these two clientIds after the second join. Mirrors DB when USE_DB. */
+  owners: string[];
   peers: Map<string, Peer & { socketId: string }>;
   notes: Note[];
   game: ActiveGame | null;
@@ -83,6 +142,7 @@ function getOrCreateRoom(code: string): Room {
   if (!room) {
     room = {
       code,
+      owners: [],
       peers: new Map(),
       notes: [],
       game: null,
@@ -252,6 +312,235 @@ function checkHangmanWin(word: string, guessed: string[]): boolean {
   return word.split("").every((ch) => guessed.includes(ch));
 }
 
+// --- Battleship helpers ---
+const BS_GRID = 10;
+const BS_FLEET_DEF: { name: string; len: number }[] = [
+  { name: "CARRIER", len: 5 },
+  { name: "BATTLESHIP", len: 4 },
+  { name: "CRUISER", len: 3 },
+  { name: "SUBMARINE", len: 3 },
+  { name: "DESTROYER", len: 2 },
+];
+
+function shipCells(
+  ship: { x: number; y: number; len: number; vertical: boolean },
+): { x: number; y: number }[] {
+  const cells: { x: number; y: number }[] = [];
+  for (let i = 0; i < ship.len; i++) {
+    cells.push({
+      x: ship.vertical ? ship.x : ship.x + i,
+      y: ship.vertical ? ship.y + i : ship.y,
+    });
+  }
+  return cells;
+}
+
+function validateFleetPlacement(
+  ships: {
+    name: string;
+    len: number;
+    x: number;
+    y: number;
+    vertical: boolean;
+  }[],
+): boolean {
+  if (!Array.isArray(ships) || ships.length !== BS_FLEET_DEF.length) return false;
+  // Fleet composition must match exactly.
+  const expected = [...BS_FLEET_DEF].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  const got = [...ships]
+    .map((s) => ({ name: s.name, len: s.len }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  for (let i = 0; i < expected.length; i++) {
+    if (expected[i].name !== got[i].name || expected[i].len !== got[i].len) {
+      return false;
+    }
+  }
+  // Each ship must fit on grid and not overlap.
+  const occupied = new Set<string>();
+  for (const ship of ships) {
+    if (
+      !Number.isInteger(ship.x) ||
+      !Number.isInteger(ship.y) ||
+      typeof ship.vertical !== "boolean"
+    ) {
+      return false;
+    }
+    if (ship.x < 0 || ship.y < 0) return false;
+    const endX = ship.vertical ? ship.x : ship.x + ship.len - 1;
+    const endY = ship.vertical ? ship.y + ship.len - 1 : ship.y;
+    if (endX >= BS_GRID || endY >= BS_GRID) return false;
+    for (const cell of shipCells(ship)) {
+      const key = `${cell.x},${cell.y}`;
+      if (occupied.has(key)) return false;
+      occupied.add(key);
+    }
+  }
+  return true;
+}
+
+function isGameOver(game: ActiveGame): boolean {
+  if (game.gameId === "battleship") return game.winnerIdx !== null;
+  return game.winner !== null;
+}
+
+/**
+ * Called after a move that ended a game. Writes game_records + points_events.
+ * Safe to call when USE_DB is false (becomes a no-op). Never throws — DB
+ * failures are logged but must not break the live game flow.
+ */
+async function persistGameEnd(room: Room, game: ActiveGame): Promise<void> {
+  if (!USE_DB) return;
+  try {
+    let winnerClientId: string | null = null;
+    let loserClientId: string | null = null;
+    let outcome: "win" | "draw" | "coop-win" | "coop-loss" = "win";
+    const pointsAwards: { clientId: string; delta: number; reason: string }[] =
+      [];
+
+    if (game.gameId === "tic-tac-toe") {
+      if (game.winner === "draw") {
+        outcome = "draw";
+      } else if (game.winner) {
+        outcome = "win";
+        winnerClientId = game.players[game.winner].clientId;
+        loserClientId =
+          game.winner === "X"
+            ? game.players.O.clientId
+            : game.players.X.clientId;
+        pointsAwards.push({
+          clientId: winnerClientId,
+          delta: 10,
+          reason: "tic-tac-toe win",
+        });
+      }
+    } else if (game.gameId === "connect-four") {
+      if (game.winner === "draw") {
+        outcome = "draw";
+      } else if (game.winner) {
+        outcome = "win";
+        winnerClientId = game.players[game.winner].clientId;
+        loserClientId =
+          game.winner === "red"
+            ? game.players.yellow.clientId
+            : game.players.red.clientId;
+        pointsAwards.push({
+          clientId: winnerClientId,
+          delta: 15,
+          reason: "connect-four win",
+        });
+      }
+    } else if (game.gameId === "hangman") {
+      if (game.winner === "win") {
+        outcome = "coop-win";
+        // Cooperative — both players get points.
+        for (const p of game.players) {
+          pointsAwards.push({
+            clientId: p.clientId,
+            delta: 12,
+            reason: "hangman win",
+          });
+        }
+      } else if (game.winner === "lose") {
+        outcome = "coop-loss";
+      }
+    } else if (game.gameId === "battleship") {
+      if (game.winnerIdx !== null) {
+        outcome = "win";
+        winnerClientId = game.players[game.winnerIdx].clientId;
+        loserClientId =
+          game.winnerIdx === 0
+            ? game.players[1].clientId
+            : game.players[0].clientId;
+        pointsAwards.push({
+          clientId: winnerClientId,
+          delta: 25,
+          reason: "neon-fleet win",
+        });
+      }
+    }
+
+    await dbRecordGame({
+      room_code: room.code,
+      game_id: game.gameId,
+      winner_client_id: winnerClientId,
+      loser_client_id: loserClientId,
+      outcome,
+      started_at: new Date(game.startedAt).toISOString(),
+      meta: null,
+    });
+
+    for (const award of pointsAwards) {
+      await dbRecordPoints(
+        room.code,
+        award.clientId,
+        award.delta,
+        award.reason,
+      );
+    }
+  } catch (err) {
+    console.error("[swoono] persistGameEnd error:", err);
+  }
+}
+
+function buildBattleshipViewFor(
+  game: BattleshipInternal,
+  myIdx: 0 | 1,
+): {
+  gameId: "battleship";
+  phase: "placement" | "battle" | "done";
+  myIdx: 0 | 1;
+  myName: string;
+  opponentName: string;
+  myReady: boolean;
+  opponentReady: boolean;
+  myShips: BattleshipShipData[];
+  myShotsFired: BattleshipShot[];
+  opponentShotsFired: BattleshipShot[];
+  turnIdx: 0 | 1;
+  winnerIdx: 0 | 1 | null;
+  startedAt: number;
+} {
+  const oppIdx: 0 | 1 = myIdx === 0 ? 1 : 0;
+  const me = game.players[myIdx];
+  const opp = game.players[oppIdx];
+  return {
+    gameId: "battleship",
+    phase: game.phase,
+    myIdx,
+    myName: me.name,
+    opponentName: opp.name,
+    myReady: me.ready,
+    opponentReady: opp.ready,
+    myShips: me.ships,
+    myShotsFired: game.shotHistory[myIdx],
+    opponentShotsFired: game.shotHistory[oppIdx],
+    turnIdx: game.turnIdx,
+    winnerIdx: game.winnerIdx,
+    startedAt: game.startedAt,
+  };
+}
+
+function emitGameUpdate(room: Room) {
+  const game = room.game;
+  if (!game) {
+    io.to(room.code).emit("game:update", { game: null });
+    return;
+  }
+  if (game.gameId === "battleship") {
+    // Per-player redacted views.
+    for (const peer of room.peers.values()) {
+      const idx: 0 | 1 =
+        game.players[0].clientId === peer.clientId ? 0 : 1;
+      const view = buildBattleshipViewFor(game, idx);
+      io.to(peer.socketId).emit("game:update", { game: view });
+    }
+    return;
+  }
+  io.to(room.code).emit("game:update", { game });
+}
+
 const app = express();
 const server = http.createServer(app);
 
@@ -282,7 +571,7 @@ type NoteCreatePayload = { text: string; color: string };
 io.on("connection", (socket: Socket) => {
   let joinedCode: string | null = null;
 
-  socket.on("join", (payload: JoinPayload, ack?: (res: unknown) => void) => {
+  socket.on("join", async (payload: JoinPayload, ack?: (res: unknown) => void) => {
     const rawCode = (payload?.code || "").trim().toUpperCase();
     const name = (payload?.name || "").trim().slice(0, 32) || "Anonymous";
     const clientId = payload?.clientId || makeId();
@@ -294,14 +583,54 @@ io.on("connection", (socket: Socket) => {
 
     const room = getOrCreateRoom(rawCode);
 
-    // Reconnect case: same clientId -> just rebind socket.
+    if (USE_DB) {
+      // Persistent path: authoritative ownership + notes live in Supabase.
+      try {
+        const { room: dbRoom } = await dbJoinRoom(rawCode, clientId, name);
+        room.owners = dbRoom.owner_client_ids || [];
+        // Load notes from DB into in-memory cache so existing code paths work.
+        const dbNotes = await dbListNotes(rawCode, MAX_NOTES_PER_ROOM);
+        room.notes = dbNotes.map((n) => ({
+          id: n.id,
+          roomCode: n.room_code,
+          authorClientId: n.author_client_id,
+          authorName: n.author_name,
+          text: n.text,
+          color: n.color,
+          createdAt: new Date(n.created_at).getTime(),
+        }));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message === "room_locked") {
+          ack?.({
+            ok: false,
+            error: "Room is private — locked to the two people already in it",
+          });
+          return;
+        }
+        console.error("[swoono] join DB error:", err);
+        ack?.({ ok: false, error: "Server error joining room" });
+        return;
+      }
+    } else {
+      // In-memory fallback (dev mode). Lock to the first two clientIds.
+      if (!room.owners.includes(clientId)) {
+        if (room.owners.length >= MAX_PEERS_PER_ROOM) {
+          ack?.({
+            ok: false,
+            error: "Room is private — locked to the two people already in it",
+          });
+          return;
+        }
+        room.owners.push(clientId);
+      }
+    }
+
+    // Rebind / add socket for the peer.
     const existing = room.peers.get(clientId);
     if (existing) {
       existing.socketId = socket.id;
       existing.name = name;
-    } else if (room.peers.size >= MAX_PEERS_PER_ROOM) {
-      ack?.({ ok: false, error: "Room is full (2 people max)" });
-      return;
     } else {
       room.peers.set(clientId, { clientId, name, socketId: socket.id });
     }
@@ -319,9 +648,14 @@ io.on("connection", (socket: Socket) => {
     });
 
     io.to(rawCode).emit("presence", { peers: publicPeers(room) });
+
+    // If a game is already in progress (player rejoining), send them its state.
+    if (room.game) {
+      emitGameUpdate(room);
+    }
   });
 
-  socket.on("note:create", (payload: NoteCreatePayload) => {
+  socket.on("note:create", async (payload: NoteCreatePayload) => {
     if (!joinedCode) return;
     const room = rooms.get(joinedCode);
     if (!room) return;
@@ -337,15 +671,42 @@ io.on("connection", (socket: Socket) => {
     if (!text) return;
     const color = String(payload?.color || "yellow").slice(0, 20);
 
-    const note: Note = {
-      id: makeId(),
-      roomCode: room.code,
-      authorClientId: me.clientId,
-      authorName: me.name,
-      text,
-      color,
-      createdAt: Date.now(),
-    };
+    let note: Note;
+
+    if (USE_DB) {
+      try {
+        const row = await dbInsertNote({
+          room_code: room.code,
+          author_client_id: me.clientId,
+          author_name: me.name,
+          text,
+          color,
+        });
+        note = {
+          id: row.id,
+          roomCode: row.room_code,
+          authorClientId: row.author_client_id,
+          authorName: row.author_name,
+          text: row.text,
+          color: row.color,
+          createdAt: new Date(row.created_at).getTime(),
+        };
+        await dbTouchRoom(room.code);
+      } catch (err) {
+        console.error("[swoono] note:create DB error:", err);
+        return;
+      }
+    } else {
+      note = {
+        id: makeId(),
+        roomCode: room.code,
+        authorClientId: me.clientId,
+        authorName: me.name,
+        text,
+        color,
+        createdAt: Date.now(),
+      };
+    }
 
     room.notes.push(note);
     if (room.notes.length > MAX_NOTES_PER_ROOM) {
@@ -361,7 +722,7 @@ io.on("connection", (socket: Socket) => {
     if (!joinedCode) return;
     const room = rooms.get(joinedCode);
     if (!room) return;
-    if (room.game && room.game.winner === null) return; // already in play
+    if (room.game && !isGameOver(room.game)) return; // already in play
 
     const peerArr = Array.from(room.peers.values());
     if (peerArr.length !== 2) return;
@@ -414,23 +775,60 @@ io.on("connection", (socket: Socket) => {
         winner: null,
         startedAt: Date.now(),
       };
+    } else if (gameId === "battleship") {
+      game = {
+        gameId: "battleship",
+        phase: "placement",
+        players: [
+          {
+            clientId: me.clientId,
+            name: me.name,
+            ships: [],
+            ready: false,
+          },
+          {
+            clientId: other.clientId,
+            name: other.name,
+            ships: [],
+            ready: false,
+          },
+        ],
+        shotHistory: [[], []],
+        turnIdx: 0,
+        winnerIdx: null,
+        startedAt: Date.now(),
+      };
     } else {
       return; // unknown game id
     }
 
     room.game = game;
     room.lastActivity = Date.now();
-    io.to(room.code).emit("game:update", { game });
+    emitGameUpdate(room);
   });
 
   socket.on(
     "game:move",
-    (payload: { cellIndex?: number; column?: number; letter?: string }) => {
+    (payload: {
+      cellIndex?: number;
+      column?: number;
+      letter?: string;
+      action?: "place" | "fire";
+      ships?: {
+        name: string;
+        len: number;
+        x: number;
+        y: number;
+        vertical: boolean;
+      }[];
+      x?: number;
+      y?: number;
+    }) => {
       if (!joinedCode) return;
       const room = rooms.get(joinedCode);
       if (!room || !room.game) return;
       const game = room.game;
-      if (game.winner !== null) return;
+      if (isGameOver(game)) return;
 
       const me = Array.from(room.peers.values()).find(
         (p) => p.socketId === socket.id,
@@ -488,6 +886,91 @@ io.on("connection", (socket: Socket) => {
           game.nextPlayer = mySide === "red" ? "yellow" : "red";
         }
         changed = true;
+      } else if (game.gameId === "battleship") {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+        const oppIdx: 0 | 1 = myIdx === 0 ? 1 : 0;
+
+        if (payload?.action === "place") {
+          if (game.phase !== "placement") return;
+          if (game.players[myIdx].ready) return;
+          const rawShips = payload.ships || [];
+          if (!validateFleetPlacement(rawShips)) return;
+          game.players[myIdx].ships = rawShips.map((s) => ({
+            name: s.name,
+            len: s.len,
+            x: s.x,
+            y: s.y,
+            vertical: s.vertical,
+            hits: 0,
+            hitPositions: [],
+          }));
+          game.players[myIdx].ready = true;
+          if (game.players[0].ready && game.players[1].ready) {
+            game.phase = "battle";
+            game.turnIdx = Math.random() < 0.5 ? 0 : 1;
+          }
+          changed = true;
+        } else if (payload?.action === "fire") {
+          if (game.phase !== "battle") return;
+          if (game.turnIdx !== myIdx) return;
+          const x = payload.x;
+          const y = payload.y;
+          if (
+            typeof x !== "number" ||
+            typeof y !== "number" ||
+            x < 0 ||
+            x >= BS_GRID ||
+            y < 0 ||
+            y >= BS_GRID
+          )
+            return;
+          // No double-fire on the same cell.
+          if (
+            game.shotHistory[myIdx].some((s) => s.x === x && s.y === y)
+          )
+            return;
+          // Resolve against opponent fleet.
+          const oppShips = game.players[oppIdx].ships;
+          let hitShip: BattleshipShipData | null = null;
+          for (const ship of oppShips) {
+            for (const cell of shipCells(ship)) {
+              if (cell.x === x && cell.y === y) {
+                hitShip = ship;
+                break;
+              }
+            }
+            if (hitShip) break;
+          }
+          let sunkShipName: string | null = null;
+          if (hitShip) {
+            hitShip.hits++;
+            hitShip.hitPositions.push({ x, y });
+            if (hitShip.hits >= hitShip.len) {
+              sunkShipName = hitShip.name;
+            }
+          }
+          game.shotHistory[myIdx].push({
+            x,
+            y,
+            hit: !!hitShip,
+            sunkShipName,
+          });
+          // Check win.
+          const allSunk = oppShips.every((s) => s.hits >= s.len);
+          if (allSunk) {
+            game.phase = "done";
+            game.winnerIdx = myIdx;
+          } else {
+            game.turnIdx = oppIdx;
+          }
+          changed = true;
+        }
       } else if (game.gameId === "hangman") {
         const letter = String(payload?.letter || "").toLowerCase();
         if (!/^[a-z]$/.test(letter)) return;
@@ -513,7 +996,11 @@ io.on("connection", (socket: Socket) => {
 
       if (changed) {
         room.lastActivity = Date.now();
-        io.to(room.code).emit("game:update", { game });
+        emitGameUpdate(room);
+        // If this move ended the game, persist the record + points.
+        if (isGameOver(game)) {
+          void persistGameEnd(room, game);
+        }
       }
     },
   );
@@ -523,7 +1010,7 @@ io.on("connection", (socket: Socket) => {
     const room = rooms.get(joinedCode);
     if (!room) return;
     room.game = null;
-    io.to(room.code).emit("game:update", { game: null });
+    emitGameUpdate(room);
   });
 
   // -- Reward effect relay -------------------------------------------------
@@ -532,7 +1019,7 @@ io.on("connection", (socket: Socket) => {
   // receives their own effect back — they show a toast on the client side.
   socket.on(
     "effect:send",
-    (payload: {
+    async (payload: {
       effectId?: string;
       data?: Record<string, unknown>;
     }) => {
@@ -547,6 +1034,12 @@ io.on("connection", (socket: Socket) => {
       );
       if (!me) return;
 
+      // Resolve the recipient (the other peer).
+      const other = Array.from(room.peers.values()).find(
+        (p) => p.socketId !== socket.id,
+      );
+      const toClientId = other?.clientId || "";
+
       const forwarded = {
         effectId,
         fromClientId: me.clientId,
@@ -557,6 +1050,75 @@ io.on("connection", (socket: Socket) => {
       };
       // socket.to() excludes the sender automatically.
       socket.to(room.code).emit("effect:receive", forwarded);
+
+      if (USE_DB && toClientId) {
+        try {
+          await dbLogRewardEvent({
+            room_code: room.code,
+            from_client_id: me.clientId,
+            to_client_id: toClientId,
+            effect_id: effectId,
+            payload: payload.data || null,
+            delivered: true, // we just pushed it; only matters for offline retries
+          });
+        } catch (err) {
+          console.error("[swoono] effect:send log error:", err);
+        }
+      }
+    },
+  );
+
+  // -- Distance apart ------------------------------------------------------
+  // Clients push their coarse location. Server stores lat/lng in DB and
+  // broadcasts the haversine distance to both peers. Raw coordinates never
+  // leave the server — only the computed distance.
+  socket.on(
+    "location:update",
+    async (payload: { lat?: number; lng?: number; accuracyM?: number }) => {
+      if (!joinedCode) return;
+      const room = rooms.get(joinedCode);
+      if (!room) return;
+
+      const me = Array.from(room.peers.values()).find(
+        (p) => p.socketId === socket.id,
+      );
+      if (!me) return;
+
+      const lat = payload?.lat;
+      const lng = payload?.lng;
+      if (
+        typeof lat !== "number" ||
+        typeof lng !== "number" ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180
+      ) {
+        return;
+      }
+
+      if (!USE_DB) return; // distance needs persistence for both peers
+
+      try {
+        await dbUpdatePeerLocation(
+          room.code,
+          me.clientId,
+          lat,
+          lng,
+          typeof payload.accuracyM === "number" ? payload.accuracyM : undefined,
+        );
+        const locs = await dbListPeerLocations(room.code);
+        if (locs.length === 2) {
+          const [a, b] = locs;
+          const meters = haversineMeters(a.lat, a.lng, b.lat, b.lng);
+          io.to(room.code).emit("distance:update", {
+            meters,
+            updatedAt: Date.now(),
+          });
+        }
+      } catch (err) {
+        console.error("[swoono] location:update error:", err);
+      }
     },
   );
 

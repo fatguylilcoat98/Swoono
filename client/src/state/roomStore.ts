@@ -22,6 +22,10 @@ type RoomState = {
   // active game (authoritative server state)
   activeGame: ActiveGame | null;
 
+  // distance apart (meters, computed on server)
+  distanceMeters: number | null;
+  distanceUpdatedAt: number | null;
+
   // actions
   setDisplayName: (name: string) => void;
   join: (code: string, name: string) => Promise<boolean>;
@@ -31,6 +35,17 @@ type RoomState = {
   makeMove: (cellIndex: number) => void;
   dropColumn: (column: number) => void;
   guessLetter: (letter: string) => void;
+  submitBattleshipPlacement: (
+    ships: {
+      name: string;
+      len: number;
+      x: number;
+      y: number;
+      vertical: boolean;
+    }[],
+  ) => void;
+  fireBattleshipShot: (x: number, y: number) => void;
+  pushLocation: (lat: number, lng: number, accuracyM?: number) => void;
   exitGame: () => void;
 };
 
@@ -73,6 +88,13 @@ export const useRoomStore = create<RoomState>((set, get) => {
     triggerEffect(payload);
   });
 
+  socket.on(
+    "distance:update",
+    ({ meters, updatedAt }: { meters: number; updatedAt: number }) => {
+      set({ distanceMeters: meters, distanceUpdatedAt: updatedAt });
+    },
+  );
+
   return {
     clientId: CLIENT_ID,
     displayName: "",
@@ -83,6 +105,8 @@ export const useRoomStore = create<RoomState>((set, get) => {
     peers: [],
     notes: [],
     activeGame: null,
+    distanceMeters: null,
+    distanceUpdatedAt: null,
 
     setDisplayName: (name) => set({ displayName: name }),
 
@@ -125,6 +149,8 @@ export const useRoomStore = create<RoomState>((set, get) => {
         peers: [],
         notes: [],
         activeGame: null,
+        distanceMeters: null,
+        distanceUpdatedAt: null,
         joinError: null,
       });
     },
@@ -149,6 +175,18 @@ export const useRoomStore = create<RoomState>((set, get) => {
 
     guessLetter: (letter) => {
       socket.emit("game:move", { letter });
+    },
+
+    submitBattleshipPlacement: (ships) => {
+      socket.emit("game:move", { action: "place", ships });
+    },
+
+    fireBattleshipShot: (x, y) => {
+      socket.emit("game:move", { action: "fire", x, y });
+    },
+
+    pushLocation: (lat, lng, accuracyM) => {
+      socket.emit("location:update", { lat, lng, accuracyM });
     },
 
     exitGame: () => {

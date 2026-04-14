@@ -98,5 +98,51 @@ export type HangmanState = {
   startedAt: number;
 };
 
+// --- Battleship (Neon Fleet) ---
+// Battleship has hidden info: each player only sees their own fleet.
+// The server emits a per-player view where opponent ships are scrubbed.
+
+export type BattleshipShipData = {
+  name: string;
+  len: number;
+  x: number;
+  y: number;
+  vertical: boolean;
+  hits: number;
+  hitPositions: { x: number; y: number }[];
+};
+
+export type BattleshipShot = {
+  x: number;
+  y: number;
+  hit: boolean;
+  /** Set only on the shot that caused a ship to sink. */
+  sunkShipName: string | null;
+};
+
+export type BattleshipState = {
+  gameId: "battleship";
+  phase: "placement" | "battle" | "done";
+  myIdx: 0 | 1;
+  myName: string;
+  opponentName: string;
+  myReady: boolean;
+  opponentReady: boolean;
+  /** My real fleet, including damage. Authoritative. */
+  myShips: BattleshipShipData[];
+  /** Shots I fired at the opponent. Drives the targeting grid. */
+  myShotsFired: BattleshipShot[];
+  /** Shots the opponent fired at my fleet. Drives the fleet-damage display. */
+  opponentShotsFired: BattleshipShot[];
+  /** Index of the player whose turn it is to fire. */
+  turnIdx: 0 | 1;
+  winnerIdx: 0 | 1 | null;
+  startedAt: number;
+};
+
 /** Union of all game state shapes. Add new games here as they land. */
-export type ActiveGame = TicTacToeState | ConnectFourState | HangmanState;
+export type ActiveGame =
+  | TicTacToeState
+  | ConnectFourState
+  | HangmanState
+  | BattleshipState;

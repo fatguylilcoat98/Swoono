@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import TicTacToeGame from "../../components/games/modules/tic-tac-toe/TicTacToeGame";
 import ConnectFourGame from "../../components/games/modules/connect-four/ConnectFourGame";
 import HangmanGame from "../../components/games/modules/hangman/HangmanGame";
+import BattleshipGame from "../../components/games/modules/battleship/BattleshipGame";
 
 export type GameCategory = "arcade" | "couples";
 
@@ -115,15 +116,15 @@ registerGame({
 });
 
 registerGame({
-  id: "neon-fleet",
+  id: "battleship",
   name: "Neon Fleet",
   category: "arcade",
-  description:
-    "Chris's deluxe ship-combat game. Plugs in here when the code lands.",
+  description: "Deluxe 2-player ship combat. Place your fleet, blast theirs.",
   emoji: "🚢",
   tier: 1,
   pointsOnWin: 25,
-  status: "placeholder",
+  status: "ready",
+  component: BattleshipGame,
 });
 
 // --- Couples ---
