@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import TicTacToeGame from "../../components/games/modules/tic-tac-toe/TicTacToeGame";
 
 export type GameCategory = "traditional" | "couples";
 
@@ -54,11 +55,12 @@ registerGame({
   id: "tic-tac-toe",
   name: "Tic-Tac-Toe",
   category: "traditional",
-  description: "Classic three-in-a-row. Best of five.",
+  description: "Classic three-in-a-row. First real game.",
   emoji: "⭕",
   tier: 0,
   pointsOnWin: 10,
-  status: "placeholder",
+  status: "ready",
+  component: TicTacToeGame,
 });
 
 registerGame({

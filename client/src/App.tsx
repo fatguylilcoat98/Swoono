@@ -5,6 +5,7 @@ import RoomEntry from "./components/room/RoomEntry";
 import RoomShell from "./components/room/RoomShell";
 import ModeSelector from "./components/theme/ModeSelector";
 import ThemeProvider from "./components/theme/ThemeProvider";
+import EffectOverlay from "./components/effects/EffectOverlay";
 import { useRoomStore } from "./state/roomStore";
 import { useThemeStore } from "./state/themeStore";
 
@@ -42,6 +43,7 @@ export default function App() {
             <RoomShell key="room" onLeave={handleLeave} />
           )}
         </AnimatePresence>
+        <EffectOverlay />
       </div>
     </ThemeProvider>
   );

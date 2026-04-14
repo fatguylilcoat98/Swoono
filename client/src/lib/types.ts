@@ -42,3 +42,25 @@ export const NOTE_COLOR_STYLES: Record<NoteColor, { bg: string; ink: string }> =
     lavender: { bg: "#d8c8ff", ink: "#1b0a38" },
     peach: { bg: "#ffcdb2", ink: "#2e1700" },
   };
+
+// --- Game state types -----------------------------------------------------
+
+export type TicTacToeSide = "X" | "O";
+
+export type TicTacToePlayerSlot = { clientId: string; name: string };
+
+export type TicTacToeState = {
+  gameId: "tic-tac-toe";
+  /** length 9 */
+  board: (TicTacToeSide | null)[];
+  players: {
+    X: TicTacToePlayerSlot;
+    O: TicTacToePlayerSlot;
+  };
+  nextPlayer: TicTacToeSide;
+  winner: TicTacToeSide | "draw" | null;
+  startedAt: number;
+};
+
+/** Union of all game state shapes. Add new games here as they land. */
+export type ActiveGame = TicTacToeState;

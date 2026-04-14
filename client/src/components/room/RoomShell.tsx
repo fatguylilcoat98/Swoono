@@ -11,6 +11,7 @@ import LeaderboardPanel from "../leaderboard/LeaderboardPanel";
 import TiersPanel from "../tiers/TiersPanel";
 import GlassPanel from "../ui/GlassPanel";
 import ModeSwitcher from "../theme/ModeSwitcher";
+import { getGame } from "../../lib/registries/gameRegistry";
 
 type RoomShellProps = {
   onLeave: () => void;
@@ -20,11 +21,17 @@ export default function RoomShell({ onLeave }: RoomShellProps) {
   const code = useRoomStore((s) => s.code);
   const peers = useRoomStore((s) => s.peers);
   const clientId = useRoomStore((s) => s.clientId);
+  const activeGame = useRoomStore((s) => s.activeGame);
+  const exitGame = useRoomStore((s) => s.exitGame);
   const points = usePointsStore((s) => s.points);
+  const awardPoints = usePointsStore((s) => s.award);
   const theme = useThemeStore((s) => s.theme);
 
   const me = peers.find((p) => p.clientId === clientId);
   const partner = peers.find((p) => p.clientId !== clientId);
+
+  const activeGameDef = activeGame ? getGame(activeGame.gameId) : null;
+  const ActiveGameComponent = activeGameDef?.component ?? null;
 
   return (
     <motion.div
@@ -80,22 +87,37 @@ export default function RoomShell({ onLeave }: RoomShellProps) {
 
         <main className="flex-1 px-5 md:px-8 pb-8 grid gap-5 md:grid-cols-3 md:auto-rows-min">
           <section className="md:col-span-2 flex flex-col gap-4 min-h-0">
-            <GlassPanel className="p-5 md:p-6 flex flex-col min-h-[360px]">
-              <div className="flex items-baseline justify-between mb-4">
-                <h2 className="font-display text-xl text-swoono-ink">Notes</h2>
-                <span className="text-swoono-dim text-xs uppercase tracking-widest">
-                  Live board
-                </span>
-              </div>
-              {partner ? (
-                <NoteBoard />
-              ) : (
-                <WaitingForPartner code={code ?? ""} />
-              )}
-            </GlassPanel>
-            <GlassPanel className="p-4 md:p-5">
-              <NoteComposer />
-            </GlassPanel>
+            {ActiveGameComponent && activeGame ? (
+              <GlassPanel className="p-5 md:p-6 flex flex-col min-h-[480px]">
+                <ActiveGameComponent
+                  roomCode={code ?? ""}
+                  selfClientId={clientId}
+                  onExit={exitGame}
+                  onAwardPoints={awardPoints}
+                />
+              </GlassPanel>
+            ) : (
+              <>
+                <GlassPanel className="p-5 md:p-6 flex flex-col min-h-[360px]">
+                  <div className="flex items-baseline justify-between mb-4">
+                    <h2 className="font-display text-xl text-swoono-ink">
+                      Notes
+                    </h2>
+                    <span className="text-swoono-dim text-xs uppercase tracking-widest">
+                      Live board
+                    </span>
+                  </div>
+                  {partner ? (
+                    <NoteBoard />
+                  ) : (
+                    <WaitingForPartner code={code ?? ""} />
+                  )}
+                </GlassPanel>
+                <GlassPanel className="p-4 md:p-5">
+                  <NoteComposer />
+                </GlassPanel>
+              </>
+            )}
           </section>
 
           <aside className="flex flex-col gap-5">

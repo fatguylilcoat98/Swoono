@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Note, Peer, JoinResult } from "../lib/types";
+import type { ActiveGame, Note, Peer, JoinResult } from "../lib/types";
 import { getSocket, CLIENT_ID } from "../lib/socket";
 
 type RoomState = {
@@ -15,11 +15,17 @@ type RoomState = {
   peers: Peer[];
   notes: Note[];
 
+  // active game (authoritative server state)
+  activeGame: ActiveGame | null;
+
   // actions
   setDisplayName: (name: string) => void;
   join: (code: string, name: string) => Promise<boolean>;
   leave: () => void;
   sendNote: (text: string, color: string) => void;
+  startGame: (gameId: string) => void;
+  makeMove: (cellIndex: number) => void;
+  exitGame: () => void;
 };
 
 export const useRoomStore = create<RoomState>((set, get) => {
@@ -52,6 +58,10 @@ export const useRoomStore = create<RoomState>((set, get) => {
     set((s) => ({ notes: [...s.notes, note] }));
   });
 
+  socket.on("game:update", ({ game }: { game: ActiveGame | null }) => {
+    set({ activeGame: game });
+  });
+
   return {
     clientId: CLIENT_ID,
     displayName: "",
@@ -61,6 +71,7 @@ export const useRoomStore = create<RoomState>((set, get) => {
     joinError: null,
     peers: [],
     notes: [],
+    activeGame: null,
 
     setDisplayName: (name) => set({ displayName: name }),
 
@@ -102,12 +113,27 @@ export const useRoomStore = create<RoomState>((set, get) => {
         code: null,
         peers: [],
         notes: [],
+        activeGame: null,
         joinError: null,
       });
     },
 
     sendNote: (text, color) => {
       socket.emit("note:create", { text, color });
+    },
+
+    startGame: (gameId) => {
+      // Don't start if a game is already active in the room.
+      if (get().activeGame) return;
+      socket.emit("game:start", { gameId });
+    },
+
+    makeMove: (cellIndex) => {
+      socket.emit("game:move", { cellIndex });
+    },
+
+    exitGame: () => {
+      socket.emit("game:exit");
     },
   };
 });

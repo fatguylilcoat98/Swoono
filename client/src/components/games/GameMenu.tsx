@@ -3,21 +3,30 @@ import {
   getGames,
   type GameDefinition,
 } from "../../lib/registries/gameRegistry";
+import { useRoomStore } from "../../state/roomStore";
 
 export default function GameMenu() {
   const games = getGames();
+  const startGame = useRoomStore((s) => s.startGame);
+  const activeGame = useRoomStore((s) => s.activeGame);
+  const gameInProgress = activeGame !== null;
 
   return (
     <GlassPanel className="p-5">
       <div className="flex items-baseline justify-between mb-4">
         <h2 className="font-display text-lg text-swoono-ink">Games</h2>
         <span className="text-swoono-dim text-[10px] uppercase tracking-widest">
-          {games.length} queued
+          {gameInProgress ? "In play" : `${games.length} queued`}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-2">
         {games.map((g) => (
-          <GameCard key={g.id} game={g} />
+          <GameCard
+            key={g.id}
+            game={g}
+            disabled={gameInProgress}
+            onPlay={() => startGame(g.id)}
+          />
         ))}
       </div>
       <p className="mt-3 text-[10px] text-swoono-dim/70">
@@ -28,13 +37,22 @@ export default function GameMenu() {
   );
 }
 
-function GameCard({ game }: { game: GameDefinition }) {
+function GameCard({
+  game,
+  disabled,
+  onPlay,
+}: {
+  game: GameDefinition;
+  disabled: boolean;
+  onPlay: () => void;
+}) {
   const locked = game.tier > 0;
-  const available = game.status === "ready" && !locked;
+  const available = game.status === "ready" && !locked && !disabled;
   return (
     <button
       type="button"
       disabled={!available}
+      onClick={available ? onPlay : undefined}
       className={`text-left rounded-xl p-3 border transition-all ${
         available
           ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-swoono-accent/40"

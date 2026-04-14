@@ -16,10 +16,26 @@ type Note = {
   createdAt: number;
 };
 
+// Game state types. Kept in sync with client/src/lib/types.ts.
+type TicTacToeSide = "X" | "O";
+type TicTacToeState = {
+  gameId: "tic-tac-toe";
+  board: (TicTacToeSide | null)[];
+  players: {
+    X: { clientId: string; name: string };
+    O: { clientId: string; name: string };
+  };
+  nextPlayer: TicTacToeSide;
+  winner: TicTacToeSide | "draw" | null;
+  startedAt: number;
+};
+type ActiveGame = TicTacToeState;
+
 type Room = {
   code: string;
   peers: Map<string, Peer & { socketId: string }>;
   notes: Note[];
+  game: ActiveGame | null;
   lastActivity: number;
 };
 
@@ -41,6 +57,7 @@ function getOrCreateRoom(code: string): Room {
       code,
       peers: new Map(),
       notes: [],
+      game: null,
       lastActivity: Date.now(),
     };
     rooms.set(code, room);
@@ -54,6 +71,29 @@ function publicPeers(room: Room): Peer[] {
     clientId: p.clientId,
     name: p.name,
   }));
+}
+
+const TTT_WIN_LINES: [number, number, number][] = [
+  [0, 1, 2],
+  [3, 4, 5],
+  [6, 7, 8],
+  [0, 3, 6],
+  [1, 4, 7],
+  [2, 5, 8],
+  [0, 4, 8],
+  [2, 4, 6],
+];
+
+function checkTTTWinner(
+  board: (TicTacToeSide | null)[],
+): TicTacToeSide | "draw" | null {
+  for (const [a, b, c] of TTT_WIN_LINES) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+      return board[a];
+    }
+  }
+  if (board.every((cell) => cell !== null)) return "draw";
+  return null;
 }
 
 const app = express();
@@ -158,6 +198,81 @@ io.on("connection", (socket: Socket) => {
     room.lastActivity = Date.now();
 
     io.to(room.code).emit("note:new", note);
+  });
+
+  // -- Games ---------------------------------------------------------------
+  socket.on("game:start", (payload: { gameId: string }) => {
+    if (!joinedCode) return;
+    const room = rooms.get(joinedCode);
+    if (!room) return;
+    if (room.game && room.game.winner === null) return; // already in play
+    if (payload?.gameId !== "tic-tac-toe") return;
+
+    const peerArr = Array.from(room.peers.values());
+    if (peerArr.length !== 2) return;
+
+    const me = peerArr.find((p) => p.socketId === socket.id);
+    if (!me) return;
+    const other = peerArr.find((p) => p.socketId !== socket.id);
+    if (!other) return;
+
+    const game: TicTacToeState = {
+      gameId: "tic-tac-toe",
+      board: Array(9).fill(null),
+      players: {
+        X: { clientId: me.clientId, name: me.name },
+        O: { clientId: other.clientId, name: other.name },
+      },
+      nextPlayer: "X",
+      winner: null,
+      startedAt: Date.now(),
+    };
+    room.game = game;
+    room.lastActivity = Date.now();
+    io.to(room.code).emit("game:update", { game });
+  });
+
+  socket.on("game:move", (payload: { cellIndex: number }) => {
+    if (!joinedCode) return;
+    const room = rooms.get(joinedCode);
+    if (!room || !room.game) return;
+    const game = room.game;
+    if (game.winner !== null) return;
+    const cellIndex = payload?.cellIndex;
+    if (typeof cellIndex !== "number" || cellIndex < 0 || cellIndex > 8) return;
+    if (game.board[cellIndex] !== null) return;
+
+    const me = Array.from(room.peers.values()).find(
+      (p) => p.socketId === socket.id,
+    );
+    if (!me) return;
+
+    const mySide: TicTacToeSide | null =
+      game.players.X.clientId === me.clientId
+        ? "X"
+        : game.players.O.clientId === me.clientId
+          ? "O"
+          : null;
+    if (!mySide) return;
+    if (mySide !== game.nextPlayer) return;
+
+    game.board[cellIndex] = mySide;
+    const winner = checkTTTWinner(game.board);
+    if (winner) {
+      game.winner = winner;
+    } else {
+      game.nextPlayer = mySide === "X" ? "O" : "X";
+    }
+    room.lastActivity = Date.now();
+    io.to(room.code).emit("game:update", { game });
+  });
+
+  socket.on("game:exit", () => {
+    if (!joinedCode) return;
+    const room = rooms.get(joinedCode);
+    if (!room) return;
+    room.game = null;
+    io.to(room.code).emit("game:update", { game: null });
   });
 
   socket.on("disconnect", () => {
