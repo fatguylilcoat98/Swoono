@@ -25,6 +25,8 @@ type RoomState = {
   sendNote: (text: string, color: string) => void;
   startGame: (gameId: string) => void;
   makeMove: (cellIndex: number) => void;
+  dropColumn: (column: number) => void;
+  guessLetter: (letter: string) => void;
   exitGame: () => void;
 };
 
@@ -130,6 +132,14 @@ export const useRoomStore = create<RoomState>((set, get) => {
 
     makeMove: (cellIndex) => {
       socket.emit("game:move", { cellIndex });
+    },
+
+    dropColumn: (column) => {
+      socket.emit("game:move", { column });
+    },
+
+    guessLetter: (letter) => {
+      socket.emit("game:move", { letter });
     },
 
     exitGame: () => {

@@ -3,15 +3,17 @@ import { AnimatePresence } from "framer-motion";
 import { useEffectsStore, type ActiveEffect } from "../../state/effectsStore";
 import VictoryBurst from "./VictoryBurst";
 import DefeatFlash from "./DefeatFlash";
+import TrophyBurst from "./trophy/TrophyBurst";
+import { TROPHY_PRESETS } from "./trophy/presets";
 
 /**
  * Top-level renderer for full-screen effects pushed onto the effectsStore.
- * Mounted once in App.tsx. Reads the active effect queue and dispatches
- * each one to its React component by effectId.
+ * Mounted once in App.tsx. Dispatches each active effect to its component
+ * by effectId:
  *
- * Adding a new effect: create the component, register a case below.
- * Adding a new reward animation: register a handler in effectRegistry
- * that pushes to the effectsStore, then wire a case here.
+ *   "effect.game.win"  -> VictoryBurst
+ *   "effect.game.lose" -> DefeatFlash
+ *   any id in TROPHY_PRESETS -> TrophyBurst with that preset's config
  */
 export default function EffectOverlay() {
   const active = useEffectsStore((s) => s.active);
@@ -37,21 +39,36 @@ function EffectRenderer({
   effect: ActiveEffect;
   onDone: () => void;
 }) {
-  // Unknown effect ids — dismiss immediately so they don't leak into the
-  // queue forever. useEffect so state update happens after render.
+  const preset = TROPHY_PRESETS[effect.effectId];
+  const isKnown =
+    effect.effectId === "effect.game.win" ||
+    effect.effectId === "effect.game.lose" ||
+    preset !== undefined;
+
+  // Unknown effect ids — dismiss immediately so they don't leak.
   useEffect(() => {
-    if (effect.effectId === "effect.game.win") return;
-    if (effect.effectId === "effect.game.lose") return;
+    if (isKnown) return;
     const t = setTimeout(onDone, 0);
     return () => clearTimeout(t);
-  }, [effect.effectId, onDone]);
+  }, [isKnown, onDone]);
 
-  switch (effect.effectId) {
-    case "effect.game.win":
-      return <VictoryBurst onDone={onDone} />;
-    case "effect.game.lose":
-      return <DefeatFlash onDone={onDone} />;
-    default:
-      return null;
+  if (effect.effectId === "effect.game.win") {
+    return <VictoryBurst onDone={onDone} />;
   }
+  if (effect.effectId === "effect.game.lose") {
+    return <DefeatFlash onDone={onDone} />;
+  }
+  if (preset) {
+    return (
+      <TrophyBurst
+        emoji={preset.emoji}
+        variant={preset.variant}
+        accent={preset.accent}
+        duration={preset.duration}
+        sound={preset.sound}
+        onDone={onDone}
+      />
+    );
+  }
+  return null;
 }

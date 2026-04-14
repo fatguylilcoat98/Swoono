@@ -1,7 +1,9 @@
 import type { ComponentType } from "react";
 import TicTacToeGame from "../../components/games/modules/tic-tac-toe/TicTacToeGame";
+import ConnectFourGame from "../../components/games/modules/connect-four/ConnectFourGame";
+import HangmanGame from "../../components/games/modules/hangman/HangmanGame";
 
-export type GameCategory = "traditional" | "couples";
+export type GameCategory = "arcade" | "couples";
 
 export type GameContextProps = {
   roomCode: string;
@@ -47,15 +49,18 @@ export function getGame(id: string): GameDefinition | undefined {
   return _games.get(id);
 }
 
-// --- Seeded placeholder games ---------------------------------------------
-// Real game modules will replace these once they ship. `component` is
-// undefined so the menu renders a "coming soon" card instead of crashing.
+// --- Seeded game list (ported from Chris's Duo app) ------------------------
+// Three games are fully playable (TTT, Connect Four, Hangman). The rest
+// are metadata placeholders — their cards render with "coming soon" state
+// until a real module lands and sets component + status: "ready".
+
+// --- Arcade ---
 
 registerGame({
   id: "tic-tac-toe",
   name: "Tic-Tac-Toe",
-  category: "traditional",
-  description: "Classic three-in-a-row. First real game.",
+  category: "arcade",
+  description: "Classic three-in-a-row. First-to-five for bragging rights.",
   emoji: "⭕",
   tier: 0,
   pointsOnWin: 10,
@@ -64,44 +69,82 @@ registerGame({
 });
 
 registerGame({
-  id: "hangman",
-  name: "Hangman",
-  category: "traditional",
-  description: "Guess the word before the drawing finishes.",
-  emoji: "📝",
+  id: "connect-four",
+  name: "Connect Four",
+  category: "arcade",
+  description: "Drop pieces, line up four, claim the board.",
+  emoji: "🔴",
   tier: 0,
   pointsOnWin: 15,
+  status: "ready",
+  component: ConnectFourGame,
+});
+
+registerGame({
+  id: "hangman",
+  name: "Hangman",
+  category: "arcade",
+  description: "Guess the word together before the hearts run out.",
+  emoji: "📝",
+  tier: 0,
+  pointsOnWin: 12,
+  status: "ready",
+  component: HangmanGame,
+});
+
+registerGame({
+  id: "word-builder",
+  name: "Word Builder",
+  category: "arcade",
+  description: "Make as many valid words as you can, together.",
+  emoji: "🔤",
+  tier: 0,
+  pointsOnWin: 18,
   status: "placeholder",
 });
 
 registerGame({
-  id: "battleship",
-  name: "Battleship",
-  category: "traditional",
-  description: "The deluxe version you already built — plugs in here.",
-  emoji: "🚢",
-  tier: 1,
-  pointsOnWin: 25,
-  status: "placeholder",
-});
-
-registerGame({
-  id: "how-well-do-you-know-me",
-  name: "How Well Do You Know Me",
-  category: "couples",
-  description: "Take turns asking each other questions. Guess and win.",
-  emoji: "💬",
+  id: "trivia",
+  name: "Trivia",
+  category: "arcade",
+  description: "Race to the right answer. First tap wins the round.",
+  emoji: "🧠",
   tier: 0,
   pointsOnWin: 20,
   status: "placeholder",
 });
 
 registerGame({
+  id: "neon-fleet",
+  name: "Neon Fleet",
+  category: "arcade",
+  description:
+    "Chris's deluxe ship-combat game. Plugs in here when the code lands.",
+  emoji: "🚢",
+  tier: 1,
+  pointsOnWin: 25,
+  status: "placeholder",
+});
+
+// --- Couples ---
+
+registerGame({
   id: "truth-or-dare",
   name: "Truth or Dare",
   category: "couples",
-  description: "Playful prompts, shared between you two.",
-  emoji: "🎲",
+  description: "Playful prompts. Paste your deck and I'll wire them up.",
+  emoji: "💬",
+  tier: 0,
+  pointsOnWin: 15,
+  status: "placeholder",
+});
+
+registerGame({
+  id: "loving-quest",
+  name: "Loving Quest",
+  category: "couples",
+  description: "Shared goals to complete together.",
+  emoji: "🎯",
   tier: 0,
   pointsOnWin: 15,
   status: "placeholder",
@@ -109,11 +152,22 @@ registerGame({
 
 registerGame({
   id: "love-trivia",
-  name: "Relationship Trivia",
+  name: "Love Trivia",
   category: "couples",
-  description: "Firsts, favorites, and the little things.",
-  emoji: "💘",
+  description: "Firsts, favorites, the little things. About you two.",
+  emoji: "💭",
   tier: 1,
   pointsOnWin: 20,
+  status: "placeholder",
+});
+
+registerGame({
+  id: "spicy-zone",
+  name: "Spicy Zone",
+  category: "couples",
+  description: "18+ intimate challenges. For the two of you only.",
+  emoji: "🔥",
+  tier: 2,
+  pointsOnWin: 25,
   status: "placeholder",
 });

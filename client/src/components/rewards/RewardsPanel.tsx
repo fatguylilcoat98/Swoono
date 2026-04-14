@@ -1,16 +1,25 @@
 import GlassPanel from "../ui/GlassPanel";
 import {
-  getRewards,
+  getRewardsByKind,
   type RewardDefinition,
+  type RewardKind,
 } from "../../lib/registries/rewardRegistry";
 import { usePointsStore } from "../../state/pointsStore";
 import { broadcastEffect } from "../../lib/registries/effectRegistry";
 import { useRoomStore } from "../../state/roomStore";
 
+const KIND_META: Record<
+  RewardKind,
+  { label: string; hint: string; accent: string }
+> = {
+  love: { label: "Love", hint: "💕", accent: "rgb(255 100 170)" },
+  mean: { label: "Mean", hint: "😈", accent: "rgb(255 70 70)" },
+  funny: { label: "Funny", hint: "😄", accent: "rgb(255 180 60)" },
+};
+
 export default function RewardsPanel() {
   const points = usePointsStore((s) => s.points);
   const spend = usePointsStore((s) => s.spend);
-  const rewards = getRewards().slice(0, 4);
   const clientId = useRoomStore((s) => s.clientId);
 
   function redeem(r: RewardDefinition) {
@@ -26,44 +35,61 @@ export default function RewardsPanel() {
   return (
     <GlassPanel className="p-5">
       <div className="flex items-baseline justify-between mb-4">
-        <h2 className="font-display text-lg text-swoono-ink">Rewards</h2>
+        <h2 className="font-display text-lg text-swoono-ink">Trophy Shop</h2>
         <span className="text-swoono-dim text-[10px] uppercase tracking-widest">
           {points} pts
         </span>
       </div>
-      <div className="flex flex-col gap-2">
-        {rewards.map((r) => {
-          const canAfford = points >= r.cost;
+
+      <div className="flex flex-col gap-4 max-h-[420px] overflow-y-auto pr-1">
+        {(Object.keys(KIND_META) as RewardKind[]).map((kind) => {
+          const rewards = getRewardsByKind(kind);
+          if (rewards.length === 0) return null;
+          const meta = KIND_META[kind];
           return (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => redeem(r)}
-              disabled={!canAfford}
-              className={`flex items-center gap-3 rounded-xl p-3 border text-left transition-all ${
-                canAfford
-                  ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-swoono-accent/40"
-                  : "bg-white/[0.02] border-white/5 opacity-60 cursor-not-allowed"
-              }`}
-            >
-              <span className="text-2xl leading-none">{r.emoji}</span>
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm text-swoono-ink">{r.name}</span>
-                <span className="block text-[10px] text-swoono-dim/80 truncate">
-                  {r.description}
+            <div key={kind}>
+              <div className="flex items-center gap-2 mb-2">
+                <span
+                  className="w-1.5 h-3 rounded-sm"
+                  style={{ background: meta.accent }}
+                />
+                <span className="text-[10px] uppercase tracking-widest text-swoono-dim">
+                  {meta.label} {meta.hint}
                 </span>
-              </span>
-              <span className="text-xs text-swoono-accent font-medium">
-                {r.cost}
-              </span>
-            </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {rewards.map((r) => {
+                  const canAfford = points >= r.cost;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => redeem(r)}
+                      disabled={!canAfford}
+                      title={r.description}
+                      className={`flex items-center gap-2 rounded-xl px-2.5 py-2 border text-left transition-all ${
+                        canAfford
+                          ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-swoono-accent/40"
+                          : "bg-white/[0.02] border-white/5 opacity-60 cursor-not-allowed"
+                      }`}
+                    >
+                      <span className="text-xl leading-none">{r.emoji}</span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-[11px] text-swoono-ink leading-tight truncate">
+                          {r.name}
+                        </span>
+                        <span className="block text-[10px] text-swoono-accent/90 font-mono">
+                          {r.cost} pts
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </div>
-      <p className="mt-3 text-[10px] text-swoono-dim/70">
-        Animations are stubs — existing effects plug into{" "}
-        <code className="text-swoono-dim">effectRegistry</code>.
-      </p>
     </GlassPanel>
   );
 }

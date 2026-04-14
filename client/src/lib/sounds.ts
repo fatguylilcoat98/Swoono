@@ -77,3 +77,111 @@ export function playLose() {
     osc.stop(end + 0.05);
   });
 }
+
+/**
+ * Warm major triad — used by love / confetti effects. C-E-G-C ascending sine.
+ */
+export function playCheer() {
+  const c = ctx();
+  if (!c) return;
+  const now = c.currentTime;
+  const notes = [261.63, 329.63, 392.0, 523.25];
+  notes.forEach((freq, i) => {
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const start = now + i * 0.05;
+    const end = start + 0.55;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.16, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, end);
+    osc.connect(gain);
+    gain.connect(c.destination);
+    osc.start(start);
+    osc.stop(end + 0.05);
+  });
+}
+
+/**
+ * Low thud + noise burst — used by slap / punch / kick.
+ */
+export function playImpact() {
+  const c = ctx();
+  if (!c) return;
+  const now = c.currentTime;
+
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(180, now);
+  osc.frequency.exponentialRampToValueAtTime(40, now + 0.15);
+  gain.gain.setValueAtTime(0.38, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+  osc.connect(gain);
+  gain.connect(c.destination);
+  osc.start(now);
+  osc.stop(now + 0.22);
+
+  const bufferSize = Math.floor(c.sampleRate * 0.1);
+  const buffer = c.createBuffer(1, bufferSize, c.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+  }
+  const noise = c.createBufferSource();
+  noise.buffer = buffer;
+  const noiseGain = c.createGain();
+  noiseGain.gain.setValueAtTime(0.18, now);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+  noise.connect(noiseGain);
+  noiseGain.connect(c.destination);
+  noise.start(now);
+}
+
+/**
+ * Cartoon spring boing — used by pie / banana / tickle.
+ */
+export function playBoing() {
+  const c = ctx();
+  if (!c) return;
+  const now = c.currentTime;
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(200, now);
+  osc.frequency.linearRampToValueAtTime(620, now + 0.1);
+  osc.frequency.linearRampToValueAtTime(250, now + 0.32);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.2, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+  osc.connect(gain);
+  gain.connect(c.destination);
+  osc.start(now);
+  osc.stop(now + 0.48);
+}
+
+/**
+ * Bell sparkle — used by kiss / hearts / flowers.
+ */
+export function playSparkle() {
+  const c = ctx();
+  if (!c) return;
+  const now = c.currentTime;
+  const notes = [880, 1174.66, 1760];
+  notes.forEach((freq, i) => {
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const start = now + i * 0.06;
+    const end = start + 0.5;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.12, start + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, end);
+    osc.connect(gain);
+    gain.connect(c.destination);
+    osc.start(start);
+    osc.stop(end + 0.05);
+  });
+}

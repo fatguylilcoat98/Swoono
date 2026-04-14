@@ -62,5 +62,41 @@ export type TicTacToeState = {
   startedAt: number;
 };
 
+// --- Connect Four ---
+
+export type ConnectFourSide = "red" | "yellow";
+
+export type ConnectFourState = {
+  gameId: "connect-four";
+  /** Flat 42-cell board, index = row*7 + col. Row 0 is the top row. */
+  board: (ConnectFourSide | null)[];
+  players: {
+    red: { clientId: string; name: string };
+    yellow: { clientId: string; name: string };
+  };
+  nextPlayer: ConnectFourSide;
+  winner: ConnectFourSide | "draw" | null;
+  /** Flat-index list of the 4 winning cells, for highlight. */
+  winningLine: number[] | null;
+  startedAt: number;
+};
+
+// --- Hangman (cooperative: both players guess the same word) ---
+
+export type HangmanState = {
+  gameId: "hangman";
+  /** Lowercase target word. Visible to both clients — cooperative game. */
+  word: string;
+  /** Letters guessed so far, lowercase, in order. */
+  guessedLetters: string[];
+  wrongCount: number;
+  maxWrong: number;
+  /** Index into players[] — whose turn it is. */
+  nextPlayerIdx: number;
+  players: { clientId: string; name: string }[];
+  winner: "win" | "lose" | null;
+  startedAt: number;
+};
+
 /** Union of all game state shapes. Add new games here as they land. */
-export type ActiveGame = TicTacToeState;
+export type ActiveGame = TicTacToeState | ConnectFourState | HangmanState;

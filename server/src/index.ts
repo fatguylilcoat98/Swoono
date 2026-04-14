@@ -17,6 +17,7 @@ type Note = {
 };
 
 // Game state types. Kept in sync with client/src/lib/types.ts.
+
 type TicTacToeSide = "X" | "O";
 type TicTacToeState = {
   gameId: "tic-tac-toe";
@@ -29,7 +30,34 @@ type TicTacToeState = {
   winner: TicTacToeSide | "draw" | null;
   startedAt: number;
 };
-type ActiveGame = TicTacToeState;
+
+type ConnectFourSide = "red" | "yellow";
+type ConnectFourState = {
+  gameId: "connect-four";
+  board: (ConnectFourSide | null)[];
+  players: {
+    red: { clientId: string; name: string };
+    yellow: { clientId: string; name: string };
+  };
+  nextPlayer: ConnectFourSide;
+  winner: ConnectFourSide | "draw" | null;
+  winningLine: number[] | null;
+  startedAt: number;
+};
+
+type HangmanState = {
+  gameId: "hangman";
+  word: string;
+  guessedLetters: string[];
+  wrongCount: number;
+  maxWrong: number;
+  nextPlayerIdx: number;
+  players: { clientId: string; name: string }[];
+  winner: "win" | "lose" | null;
+  startedAt: number;
+};
+
+type ActiveGame = TicTacToeState | ConnectFourState | HangmanState;
 
 type Room = {
   code: string;
@@ -94,6 +122,134 @@ function checkTTTWinner(
   }
   if (board.every((cell) => cell !== null)) return "draw";
   return null;
+}
+
+// --- Connect Four helpers ---
+const C4_ROWS = 6;
+const C4_COLS = 7;
+
+function dropC4Piece(
+  board: (ConnectFourSide | null)[],
+  col: number,
+  side: ConnectFourSide,
+): number | null {
+  // Returns the flat index where the piece landed, or null if column full.
+  for (let r = C4_ROWS - 1; r >= 0; r--) {
+    const idx = r * C4_COLS + col;
+    if (board[idx] === null) {
+      board[idx] = side;
+      return idx;
+    }
+  }
+  return null;
+}
+
+function checkC4Winner(board: (ConnectFourSide | null)[]): {
+  winner: ConnectFourSide | "draw" | null;
+  line: number[] | null;
+} {
+  const rows = C4_ROWS;
+  const cols = C4_COLS;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const v = board[r * cols + c];
+      if (!v) continue;
+      // horizontal
+      if (
+        c + 3 < cols &&
+        board[r * cols + c + 1] === v &&
+        board[r * cols + c + 2] === v &&
+        board[r * cols + c + 3] === v
+      ) {
+        return {
+          winner: v,
+          line: [
+            r * cols + c,
+            r * cols + c + 1,
+            r * cols + c + 2,
+            r * cols + c + 3,
+          ],
+        };
+      }
+      // vertical
+      if (
+        r + 3 < rows &&
+        board[(r + 1) * cols + c] === v &&
+        board[(r + 2) * cols + c] === v &&
+        board[(r + 3) * cols + c] === v
+      ) {
+        return {
+          winner: v,
+          line: [
+            r * cols + c,
+            (r + 1) * cols + c,
+            (r + 2) * cols + c,
+            (r + 3) * cols + c,
+          ],
+        };
+      }
+      // diag down-right
+      if (
+        r + 3 < rows &&
+        c + 3 < cols &&
+        board[(r + 1) * cols + c + 1] === v &&
+        board[(r + 2) * cols + c + 2] === v &&
+        board[(r + 3) * cols + c + 3] === v
+      ) {
+        return {
+          winner: v,
+          line: [
+            r * cols + c,
+            (r + 1) * cols + c + 1,
+            (r + 2) * cols + c + 2,
+            (r + 3) * cols + c + 3,
+          ],
+        };
+      }
+      // diag down-left
+      if (
+        r + 3 < rows &&
+        c - 3 >= 0 &&
+        board[(r + 1) * cols + c - 1] === v &&
+        board[(r + 2) * cols + c - 2] === v &&
+        board[(r + 3) * cols + c - 3] === v
+      ) {
+        return {
+          winner: v,
+          line: [
+            r * cols + c,
+            (r + 1) * cols + c - 1,
+            (r + 2) * cols + c - 2,
+            (r + 3) * cols + c - 3,
+          ],
+        };
+      }
+    }
+  }
+  if (board.every((cell) => cell !== null)) {
+    return { winner: "draw", line: null };
+  }
+  return { winner: null, line: null };
+}
+
+// --- Hangman helpers ---
+const HANGMAN_WORDS = [
+  "apple", "banana", "castle", "dragon", "eagle", "forest", "garden",
+  "harbor", "island", "jungle", "kitten", "lemon", "meadow", "nebula",
+  "ocean", "pepper", "quartz", "ribbon", "sunset", "travel", "unicorn",
+  "violet", "wizard", "yellow", "zephyr", "bridge", "coffee", "danger",
+  "escape", "flower", "guitar", "honest", "jacket", "ladder", "mirror",
+  "napkin", "orange", "puzzle", "rocket", "silver", "tunnel", "velvet",
+  "window", "button", "camera", "dinner", "engine", "friend", "giggle",
+  "hollow", "insect", "jelly", "knight", "legend", "magnet", "nature",
+];
+
+function pickHangmanWord(): string {
+  return HANGMAN_WORDS[Math.floor(Math.random() * HANGMAN_WORDS.length)];
+}
+
+function checkHangmanWin(word: string, guessed: string[]): boolean {
+  return word.split("").every((ch) => guessed.includes(ch));
 }
 
 const app = express();
@@ -206,7 +362,6 @@ io.on("connection", (socket: Socket) => {
     const room = rooms.get(joinedCode);
     if (!room) return;
     if (room.game && room.game.winner === null) return; // already in play
-    if (payload?.gameId !== "tic-tac-toe") return;
 
     const peerArr = Array.from(room.peers.values());
     if (peerArr.length !== 2) return;
@@ -216,56 +371,152 @@ io.on("connection", (socket: Socket) => {
     const other = peerArr.find((p) => p.socketId !== socket.id);
     if (!other) return;
 
-    const game: TicTacToeState = {
-      gameId: "tic-tac-toe",
-      board: Array(9).fill(null),
-      players: {
-        X: { clientId: me.clientId, name: me.name },
-        O: { clientId: other.clientId, name: other.name },
-      },
-      nextPlayer: "X",
-      winner: null,
-      startedAt: Date.now(),
-    };
+    const gameId = payload?.gameId;
+    let game: ActiveGame | null = null;
+
+    if (gameId === "tic-tac-toe") {
+      game = {
+        gameId: "tic-tac-toe",
+        board: Array(9).fill(null),
+        players: {
+          X: { clientId: me.clientId, name: me.name },
+          O: { clientId: other.clientId, name: other.name },
+        },
+        nextPlayer: "X",
+        winner: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "connect-four") {
+      game = {
+        gameId: "connect-four",
+        board: Array(C4_ROWS * C4_COLS).fill(null),
+        players: {
+          red: { clientId: me.clientId, name: me.name },
+          yellow: { clientId: other.clientId, name: other.name },
+        },
+        nextPlayer: "red",
+        winner: null,
+        winningLine: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "hangman") {
+      game = {
+        gameId: "hangman",
+        word: pickHangmanWord(),
+        guessedLetters: [],
+        wrongCount: 0,
+        maxWrong: 6,
+        nextPlayerIdx: 0,
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        winner: null,
+        startedAt: Date.now(),
+      };
+    } else {
+      return; // unknown game id
+    }
+
     room.game = game;
     room.lastActivity = Date.now();
     io.to(room.code).emit("game:update", { game });
   });
 
-  socket.on("game:move", (payload: { cellIndex: number }) => {
-    if (!joinedCode) return;
-    const room = rooms.get(joinedCode);
-    if (!room || !room.game) return;
-    const game = room.game;
-    if (game.winner !== null) return;
-    const cellIndex = payload?.cellIndex;
-    if (typeof cellIndex !== "number" || cellIndex < 0 || cellIndex > 8) return;
-    if (game.board[cellIndex] !== null) return;
+  socket.on(
+    "game:move",
+    (payload: { cellIndex?: number; column?: number; letter?: string }) => {
+      if (!joinedCode) return;
+      const room = rooms.get(joinedCode);
+      if (!room || !room.game) return;
+      const game = room.game;
+      if (game.winner !== null) return;
 
-    const me = Array.from(room.peers.values()).find(
-      (p) => p.socketId === socket.id,
-    );
-    if (!me) return;
+      const me = Array.from(room.peers.values()).find(
+        (p) => p.socketId === socket.id,
+      );
+      if (!me) return;
 
-    const mySide: TicTacToeSide | null =
-      game.players.X.clientId === me.clientId
-        ? "X"
-        : game.players.O.clientId === me.clientId
-          ? "O"
-          : null;
-    if (!mySide) return;
-    if (mySide !== game.nextPlayer) return;
+      let changed = false;
 
-    game.board[cellIndex] = mySide;
-    const winner = checkTTTWinner(game.board);
-    if (winner) {
-      game.winner = winner;
-    } else {
-      game.nextPlayer = mySide === "X" ? "O" : "X";
-    }
-    room.lastActivity = Date.now();
-    io.to(room.code).emit("game:update", { game });
-  });
+      if (game.gameId === "tic-tac-toe") {
+        const cellIndex = payload?.cellIndex;
+        if (
+          typeof cellIndex !== "number" ||
+          cellIndex < 0 ||
+          cellIndex > 8
+        )
+          return;
+        if (game.board[cellIndex] !== null) return;
+
+        const mySide: TicTacToeSide | null =
+          game.players.X.clientId === me.clientId
+            ? "X"
+            : game.players.O.clientId === me.clientId
+              ? "O"
+              : null;
+        if (!mySide || mySide !== game.nextPlayer) return;
+
+        game.board[cellIndex] = mySide;
+        const winner = checkTTTWinner(game.board);
+        if (winner) {
+          game.winner = winner;
+        } else {
+          game.nextPlayer = mySide === "X" ? "O" : "X";
+        }
+        changed = true;
+      } else if (game.gameId === "connect-four") {
+        const col = payload?.column;
+        if (typeof col !== "number" || col < 0 || col >= C4_COLS) return;
+
+        const mySide: ConnectFourSide | null =
+          game.players.red.clientId === me.clientId
+            ? "red"
+            : game.players.yellow.clientId === me.clientId
+              ? "yellow"
+              : null;
+        if (!mySide || mySide !== game.nextPlayer) return;
+
+        const landedIdx = dropC4Piece(game.board, col, mySide);
+        if (landedIdx === null) return; // column full
+
+        const result = checkC4Winner(game.board);
+        if (result.winner) {
+          game.winner = result.winner;
+          game.winningLine = result.line;
+        } else {
+          game.nextPlayer = mySide === "red" ? "yellow" : "red";
+        }
+        changed = true;
+      } else if (game.gameId === "hangman") {
+        const letter = String(payload?.letter || "").toLowerCase();
+        if (!/^[a-z]$/.test(letter)) return;
+        if (game.guessedLetters.includes(letter)) return;
+
+        const currentPlayer = game.players[game.nextPlayerIdx];
+        if (!currentPlayer || currentPlayer.clientId !== me.clientId) return;
+
+        game.guessedLetters.push(letter);
+        if (!game.word.includes(letter)) {
+          game.wrongCount++;
+        }
+        if (game.wrongCount >= game.maxWrong) {
+          game.winner = "lose";
+        } else if (checkHangmanWin(game.word, game.guessedLetters)) {
+          game.winner = "win";
+        } else {
+          game.nextPlayerIdx =
+            (game.nextPlayerIdx + 1) % game.players.length;
+        }
+        changed = true;
+      }
+
+      if (changed) {
+        room.lastActivity = Date.now();
+        io.to(room.code).emit("game:update", { game });
+      }
+    },
+  );
 
   socket.on("game:exit", () => {
     if (!joinedCode) return;
