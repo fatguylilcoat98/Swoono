@@ -526,6 +526,40 @@ io.on("connection", (socket: Socket) => {
     io.to(room.code).emit("game:update", { game: null });
   });
 
+  // -- Reward effect relay -------------------------------------------------
+  // A sends an effect (kiss, slap, fireworks) → server forwards to the
+  // OTHER peers in the room, stamped with the sender's name. Sender never
+  // receives their own effect back — they show a toast on the client side.
+  socket.on(
+    "effect:send",
+    (payload: {
+      effectId?: string;
+      data?: Record<string, unknown>;
+    }) => {
+      if (!joinedCode) return;
+      const room = rooms.get(joinedCode);
+      if (!room) return;
+      const effectId = typeof payload?.effectId === "string" ? payload.effectId : "";
+      if (!effectId) return;
+
+      const me = Array.from(room.peers.values()).find(
+        (p) => p.socketId === socket.id,
+      );
+      if (!me) return;
+
+      const forwarded = {
+        effectId,
+        fromClientId: me.clientId,
+        data: {
+          ...(payload.data || {}),
+          fromName: me.name,
+        },
+      };
+      // socket.to() excludes the sender automatically.
+      socket.to(room.code).emit("effect:receive", forwarded);
+    },
+  );
+
   socket.on("disconnect", () => {
     if (!joinedCode) return;
     const room = rooms.get(joinedCode);

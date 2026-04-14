@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import GlassPanel from "../ui/GlassPanel";
 import {
   getRewardsByKind,
@@ -5,7 +7,7 @@ import {
   type RewardKind,
 } from "../../lib/registries/rewardRegistry";
 import { usePointsStore } from "../../state/pointsStore";
-import { broadcastEffect } from "../../lib/registries/effectRegistry";
+import { sendEffectToPeer } from "../../lib/registries/effectRegistry";
 import { useRoomStore } from "../../state/roomStore";
 
 const KIND_META: Record<
@@ -21,25 +23,57 @@ export default function RewardsPanel() {
   const points = usePointsStore((s) => s.points);
   const spend = usePointsStore((s) => s.spend);
   const clientId = useRoomStore((s) => s.clientId);
+  const peers = useRoomStore((s) => s.peers);
+  const hasPartner = peers.some((p) => p.clientId !== clientId);
+
+  const [sentToast, setSentToast] = useState<{
+    id: number;
+    text: string;
+  } | null>(null);
 
   function redeem(r: RewardDefinition) {
+    if (!hasPartner) {
+      setSentToast({ id: Date.now(), text: "Waiting for your partner…" });
+      setTimeout(() => setSentToast(null), 1800);
+      return;
+    }
     const ok = spend(r.cost, `Redeemed ${r.name}`);
     if (!ok) return;
-    broadcastEffect({
+    sendEffectToPeer({
       effectId: r.effectId,
       fromClientId: clientId,
       data: { rewardId: r.id },
     });
+    setSentToast({
+      id: Date.now(),
+      text: `${r.emoji} ${r.name} sent!`,
+    });
+    setTimeout(() => setSentToast(null), 1800);
   }
 
   return (
-    <GlassPanel className="p-5">
+    <GlassPanel className="p-5 relative">
       <div className="flex items-baseline justify-between mb-4">
         <h2 className="font-display text-lg text-swoono-ink">Trophy Shop</h2>
         <span className="text-swoono-dim text-[10px] uppercase tracking-widest">
           {points} pts
         </span>
       </div>
+
+      <AnimatePresence>
+        {sentToast && (
+          <motion.div
+            key={sentToast.id}
+            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-swoono-accent/25 border border-swoono-accent/50 text-swoono-ink text-xs uppercase tracking-widest px-3 py-1.5 rounded-full shadow-glow"
+          >
+            {sentToast.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex flex-col gap-4 max-h-[420px] overflow-y-auto pr-1">
         {(Object.keys(KIND_META) as RewardKind[]).map((kind) => {

@@ -154,3 +154,15 @@ registerReward({
   effectId: "effect.tickle",
   tier: 0,
 });
+
+// Premium — the full fireworks display ported from Chris's old Duo animation.
+registerReward({
+  id: "fireworks",
+  name: "Fireworks Display",
+  description: "A full celebration sky — rockets, bursts, and screen flashes.",
+  kind: "funny",
+  cost: 25,
+  emoji: "🎆",
+  effectId: "effect.fireworks",
+  tier: 0,
+});

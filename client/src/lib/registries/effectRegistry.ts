@@ -3,7 +3,7 @@ import { getSocket } from "../socket";
 export type EffectPayload = {
   effectId: string;
   fromClientId: string;
-  /** Optional: target a specific peer. Undefined = both sides. */
+  /** Optional: target a specific peer. Undefined = all peers in room. */
   toClientId?: string;
   data?: Record<string, unknown>;
 };
@@ -21,12 +21,16 @@ export function hasEffect(effectId: string): boolean {
 }
 
 /**
- * Run a local effect by id. In Phase 1 this looks up a registered handler
- * and runs it, or logs a breadcrumb if no handler is registered yet.
+ * Run an effect locally by id. Looks up a registered handler and runs it,
+ * or logs a breadcrumb if no handler is registered yet.
  *
- * Plug-in point: call registerEffect("effect.kiss", payload => { ... })
- * from each existing animation component's entry file. That's all the
- * wiring required for reward redemption to play on screen.
+ * Use this for SELF-FEEDBACK effects — things that should appear on the
+ * current player's screen. Examples: game win/lose celebrations. The
+ * winner sees "WINNER" on their screen; the loser sees "LOSER" on theirs.
+ *
+ * For effects that should appear on the PEER'S screen (reward gestures
+ * like kiss / slap / fireworks), use sendEffectToPeer instead — it
+ * routes through the server so only the recipient plays the animation.
  */
 export function triggerEffect(payload: EffectPayload) {
   const handler = _handlers.get(payload.effectId);
@@ -39,12 +43,18 @@ export function triggerEffect(payload: EffectPayload) {
 }
 
 /**
- * Trigger locally AND ask the server to relay it to the peer. The server
- * relay for "effect:broadcast" is a Phase 2 addition — the emit is a no-op
- * from the server today, so local-only effects still play correctly.
+ * Send an effect to the OTHER peer(s) in the room. Does NOT play locally.
+ *
+ * This is the correct entry point for reward gestures — when A kisses B,
+ * the animation should appear on B's screen, not A's. The sender typically
+ * shows a small confirmation toast instead of the full effect.
+ *
+ * Server relay: "effect:send" is handled in server/src/index.ts, which
+ * forwards to the room excluding the sender via socket.to(roomCode). The
+ * receiving client picks it up via an "effect:receive" listener wired
+ * in roomStore.ts, which then calls triggerEffect() locally.
  */
-export function broadcastEffect(payload: EffectPayload) {
-  triggerEffect(payload);
+export function sendEffectToPeer(payload: EffectPayload) {
   const socket = getSocket();
-  socket.emit("effect:broadcast", payload);
+  socket.emit("effect:send", payload);
 }

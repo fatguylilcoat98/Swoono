@@ -19,6 +19,11 @@ export function registerGameEffects() {
     useEffectsStore.getState().pushEffect("effect.game.lose", payload.data);
   });
 
+  // Fireworks — premium reward, its own standalone component (not via TrophyBurst)
+  registerEffect("effect.fireworks", (payload) => {
+    useEffectsStore.getState().pushEffect("effect.fireworks", payload.data);
+  });
+
   Object.keys(TROPHY_PRESETS).forEach((effectId) => {
     registerEffect(effectId, (payload) => {
       useEffectsStore.getState().pushEffect(effectId, payload.data);

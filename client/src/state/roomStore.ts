@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import type { ActiveGame, Note, Peer, JoinResult } from "../lib/types";
 import { getSocket, CLIENT_ID } from "../lib/socket";
+import {
+  triggerEffect,
+  type EffectPayload,
+} from "../lib/registries/effectRegistry";
 
 type RoomState = {
   // identity
@@ -62,6 +66,11 @@ export const useRoomStore = create<RoomState>((set, get) => {
 
   socket.on("game:update", ({ game }: { game: ActiveGame | null }) => {
     set({ activeGame: game });
+  });
+
+  // A peer sent us a reward effect — play it locally on our screen.
+  socket.on("effect:receive", (payload: EffectPayload) => {
+    triggerEffect(payload);
   });
 
   return {

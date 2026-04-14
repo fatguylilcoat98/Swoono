@@ -3,6 +3,7 @@ import { AnimatePresence } from "framer-motion";
 import { useEffectsStore, type ActiveEffect } from "../../state/effectsStore";
 import VictoryBurst from "./VictoryBurst";
 import DefeatFlash from "./DefeatFlash";
+import FireworksBurst from "./FireworksBurst";
 import TrophyBurst from "./trophy/TrophyBurst";
 import { TROPHY_PRESETS } from "./trophy/presets";
 
@@ -43,6 +44,7 @@ function EffectRenderer({
   const isKnown =
     effect.effectId === "effect.game.win" ||
     effect.effectId === "effect.game.lose" ||
+    effect.effectId === "effect.fireworks" ||
     preset !== undefined;
 
   // Unknown effect ids — dismiss immediately so they don't leak.
@@ -57,6 +59,9 @@ function EffectRenderer({
   }
   if (effect.effectId === "effect.game.lose") {
     return <DefeatFlash onDone={onDone} />;
+  }
+  if (effect.effectId === "effect.fireworks") {
+    return <FireworksBurst onDone={onDone} />;
   }
   if (preset) {
     return (
