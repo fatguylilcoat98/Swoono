@@ -41,9 +41,9 @@ export const SYNTH_PRESETS: Record<string, SynthPreset> = {
       [-5, 0, 4], // C
       [-2, 2, 5], // G
     ],
-    padGain: 0.14,
-    arpGain: 0.08,
-    filterCutoff: 1400,
+    padGain: 0.28,
+    arpGain: 0.18,
+    filterCutoff: 1600,
   },
   energetic: {
     id: "energetic",
@@ -56,9 +56,9 @@ export const SYNTH_PRESETS: Record<string, SynthPreset> = {
       [2, 6, 9], // Em
       [7, 11, 14], // A
     ],
-    padGain: 0.12,
-    arpGain: 0.11,
-    filterCutoff: 2200,
+    padGain: 0.26,
+    arpGain: 0.22,
+    filterCutoff: 2400,
   },
   ambient: {
     id: "ambient",
@@ -71,9 +71,9 @@ export const SYNTH_PRESETS: Record<string, SynthPreset> = {
       [-3, 4, 9], // Em
       [2, 7, 11], // Dsus
     ],
-    padGain: 0.1,
-    arpGain: 0.06,
-    filterCutoff: 900,
+    padGain: 0.22,
+    arpGain: 0.14,
+    filterCutoff: 1100,
   },
 };
 
@@ -128,7 +128,9 @@ export function startSynthMusic(
   const scheduledSources: AudioScheduledSourceNode[] = [];
 
   function spawnPadVoice(freq: number, startTime: number, durationSec: number) {
-    // Two detuned sines for chorus.
+    // Two detuned sines for chorus. Fast attack so the user hears
+    // music immediately — previously the 1.5s ramp made it seem like
+    // nothing was playing for the first second.
     for (const detune of [-4, 4]) {
       const osc = ctx.createOscillator();
       osc.type = "sine";
@@ -136,8 +138,8 @@ export function startSynthMusic(
       osc.detune.value = detune;
       const env = ctx.createGain();
       env.gain.setValueAtTime(0, startTime);
-      env.gain.linearRampToValueAtTime(1, startTime + 1.5); // slow attack
-      env.gain.setValueAtTime(1, startTime + durationSec - 1.5);
+      env.gain.linearRampToValueAtTime(1, startTime + 0.3); // fast attack
+      env.gain.setValueAtTime(1, startTime + durationSec - 0.6);
       env.gain.linearRampToValueAtTime(0, startTime + durationSec);
       osc.connect(env);
       env.connect(padBus);

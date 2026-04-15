@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ActiveGame, Note, Peer, JoinResult } from "../lib/types";
+import type { ActiveGame, GameRecord, Note, Peer, JoinResult } from "../lib/types";
 import { getSocket, CLIENT_ID } from "../lib/socket";
 import {
   triggerEffect,
@@ -26,6 +26,9 @@ type RoomState = {
   // distance apart (meters, computed on server)
   distanceMeters: number | null;
   distanceUpdatedAt: number | null;
+
+  // recent game history — drives the Leaderboard "Recent games" list
+  records: GameRecord[];
 
   // points tracking for all peers
   peerPoints: Record<string, number>;
@@ -114,6 +117,11 @@ export const useRoomStore = create<RoomState>((set, get) => {
     },
   );
 
+  // Recent game history from the server
+  socket.on("records:update", ({ records }: { records: GameRecord[] }) => {
+    set({ records: Array.isArray(records) ? records : [] });
+  });
+
   // The other peer hit "Reset Room" — we get ejected and dropped to
   // the landing screen with a message.
   socket.on("room:reset:forced", () => {
@@ -154,6 +162,7 @@ export const useRoomStore = create<RoomState>((set, get) => {
     activeGame: null,
     distanceMeters: null,
     distanceUpdatedAt: null,
+    records: [],
     peerPoints: {},
 
     setDisplayName: (name) => set({ displayName: name }),
@@ -173,6 +182,7 @@ export const useRoomStore = create<RoomState>((set, get) => {
                 code: res.room.code,
                 peers: res.room.peers,
                 notes: res.room.notes,
+                records: res.room.records || [],
                 displayName,
                 joining: false,
                 joinError: null,
@@ -201,6 +211,7 @@ export const useRoomStore = create<RoomState>((set, get) => {
         distanceUpdatedAt: null,
         joinError: null,
         peerPoints: {},
+        records: [],
       });
     },
 

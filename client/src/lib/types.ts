@@ -13,6 +13,17 @@ export type Note = {
   createdAt: number;
 };
 
+export type GameRecord = {
+  id: string;
+  roomCode: string;
+  gameId: string;
+  winnerClientId: string | null;
+  loserClientId: string | null;
+  outcome: "win" | "draw" | "coop-win" | "coop-loss";
+  startedAt: number;
+  finishedAt: number;
+};
+
 export type JoinResult =
   | {
       ok: true;
@@ -20,6 +31,7 @@ export type JoinResult =
         code: string;
         peers: Peer[];
         notes: Note[];
+        records?: GameRecord[];
       };
     }
   | { ok: false; error: string };

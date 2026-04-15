@@ -11,6 +11,7 @@ import {
   insertNote as dbInsertNote,
   recordPoints as dbRecordPoints,
   recordGame as dbRecordGame,
+  listGameRecords as dbListGameRecords,
   logRewardEvent as dbLogRewardEvent,
   updatePeerLocation as dbUpdatePeerLocation,
   listPeerLocations as dbListPeerLocations,
@@ -1195,16 +1196,35 @@ async function persistGameEnd(room: Room, game: ActiveGame, io: Server): Promise
     if (pointsAwards.length > 0) {
       try {
         const balances = await pointsBalances(room.code);
-        for (const [clientId, peer] of room.peers) {
+        for (const [clientId] of room.peers) {
           const currentPoints = balances[clientId] || 0;
-          io.to(room.code).emit("points:sync", { 
-            clientId: clientId, 
-            points: currentPoints 
+          io.to(room.code).emit("points:sync", {
+            clientId: clientId,
+            points: currentPoints,
           });
         }
       } catch (err) {
         console.error("[swoono] points sync error:", err);
       }
+    }
+
+    // Broadcast the updated game history so both clients can refresh
+    // their Recent Games panel without a round-trip.
+    try {
+      const rows = await dbListGameRecords(room.code, 25);
+      const records = rows.map((r) => ({
+        id: r.id,
+        roomCode: r.room_code,
+        gameId: r.game_id,
+        winnerClientId: r.winner_client_id,
+        loserClientId: r.loser_client_id,
+        outcome: r.outcome,
+        startedAt: new Date(r.started_at).getTime(),
+        finishedAt: new Date(r.finished_at).getTime(),
+      }));
+      io.to(room.code).emit("records:update", { records });
+    } catch (err) {
+      console.error("[swoono] records broadcast error:", err);
     }
   } catch (err) {
     console.error("[swoono] persistGameEnd error:", err);
@@ -1367,12 +1387,43 @@ io.on("connection", (socket: Socket) => {
     joinedClientId = clientId;
     socket.join(rawCode);
 
+    // Load recent game history so the leaderboard panel has something
+    // to show the moment the room opens.
+    let recentRecords: {
+      id: string;
+      roomCode: string;
+      gameId: string;
+      winnerClientId: string | null;
+      loserClientId: string | null;
+      outcome: "win" | "draw" | "coop-win" | "coop-loss";
+      startedAt: number;
+      finishedAt: number;
+    }[] = [];
+    if (USE_DB) {
+      try {
+        const rows = await dbListGameRecords(rawCode, 25);
+        recentRecords = rows.map((r) => ({
+          id: r.id,
+          roomCode: r.room_code,
+          gameId: r.game_id,
+          winnerClientId: r.winner_client_id,
+          loserClientId: r.loser_client_id,
+          outcome: r.outcome,
+          startedAt: new Date(r.started_at).getTime(),
+          finishedAt: new Date(r.finished_at).getTime(),
+        }));
+      } catch (err) {
+        console.error("[swoono] join records fetch error:", err);
+      }
+    }
+
     ack?.({
       ok: true,
       room: {
         code: rawCode,
         peers: publicPeers(room),
         notes: room.notes,
+        records: recentRecords,
       },
     });
 
