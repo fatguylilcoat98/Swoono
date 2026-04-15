@@ -16,14 +16,14 @@ import {
   haversineMeters,
   pointsBalances,
 } from "./db";
-// ===== INPUT SANITIZATION & SECURITY =====
+n// ===== INPUT SANITIZATION & SECURITY =====
 function sanitizeString(input: string, maxLength = 256): string {
   if (!input || typeof input !== "string") return "";
   return input
     .replace(/<[^>]*>/g, "")
     .replace(/[<>&"']/g, (char) => ({
       "<": "&lt;", ">": "&gt;", "&": "&amp;", 
-      "\"": "&quot;", "'": "&#x27;"
+      """: "&quot;", "'": "&#x27;"
     }[char] || char))
     .trim().slice(0, maxLength);
 }
@@ -720,6 +720,18 @@ io.on("connection", (socket: Socket) => {
     const text = sanitizeString(payload?.text || "", 500);
     if (!text.trim()) return;
     const color = sanitizeString(payload?.color || "yellow", 20);
+    const text = sanitizeString(payload?.text || "", 500);
+    if (!text.trim()) return;
+    const color = sanitizeString(payload?.color || "yellow", 20);
+    const text = sanitizeString(payload?.text || "", 500);
+    if (!text.trim()) return;
+    const color = sanitizeString(payload?.color || "yellow", 20);
+    const text = sanitizeString(payload?.text || "", 500);
+    if (!text.trim()) return;
+    const color = sanitizeString(payload?.color || "yellow", 20);
+    const text = sanitizeString(payload?.text || "", 500);
+    if (!text.trim()) return;
+    const color = sanitizeString(payload?.color || "yellow", 20);
 
     let note: Note;
 
@@ -1181,7 +1193,7 @@ io.on("connection", (socket: Socket) => {
     
     try {
       const balances = await pointsBalances(joinedCode);
-      const points = joinedClientId ? (balances[joinedClientId] || 0) : 0;
+      const points = balances[joinedClientId] || 0;
       ack?.({ points });
     } catch (err) {
       console.error("[swoono] points:get error:", err);
