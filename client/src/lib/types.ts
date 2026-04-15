@@ -140,12 +140,64 @@ export type BattleshipState = {
   startedAt: number;
 };
 
+// --- Neon Stacker (physics tower) ---
+// Server tracks whose turn, how many drops per player, level progression.
+// The matter.js physics runs client-side — sync happens via deterministic
+// replay of the authoritative drop events the server broadcasts.
+
+export type NeonStackerShape = {
+  width: number;
+  height: number;
+  name: string;
+};
+
+export type NeonStackerDrop = {
+  /** Global drop index, increments on every drop */
+  index: number;
+  /** Which player (0 or 1) dropped this block */
+  playerIdx: 0 | 1;
+  /** Crane X position in the canvas at the moment of drop */
+  craneX: number;
+  /** Crane time (used to reconstruct crane animation phase) */
+  craneTime: number;
+  /** The block shape chosen for this drop */
+  shape: NeonStackerShape;
+  /** Server-authoritative timestamp */
+  at: number;
+};
+
+export type NeonStackerState = {
+  gameId: "neon-stacker";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  /** 0 or 1 — whose turn to drop next */
+  nextPlayerIdx: 0 | 1;
+  /** Total drops so far (both players combined) */
+  dropCount: number;
+  /** Current level — every 5 drops increments this; base shrinks */
+  level: number;
+  /** Per-player drop counts (for the leaderboard / stats) */
+  playerDropCounts: [number, number];
+  /** Winner index, null while game is live */
+  winnerIdx: 0 | 1 | null;
+  /**
+   * Last drop event. When this changes both clients replay it locally
+   * through the matter.js engine. The server never simulates physics —
+   * clients do, and trust each other's reported physics outcomes.
+   */
+  lastDrop: NeonStackerDrop | null;
+  startedAt: number;
+};
+
 /** Union of all game state shapes. Add new games here as they land. */
 export type ActiveGame =
   | TicTacToeState
   | ConnectFourState
   | HangmanState
-  | BattleshipState;
+  | BattleshipState
+  | NeonStackerState;
 
 // --- Production utility types ---------------------------------------------
 

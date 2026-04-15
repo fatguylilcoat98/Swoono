@@ -133,11 +133,44 @@ type BattleshipInternal = {
   startedAt: number;
 };
 
+// --- Neon Stacker (physics tower, client-simulated, server-arbitrated) ---
+
+type NeonStackerShape = {
+  width: number;
+  height: number;
+  name: string;
+};
+
+type NeonStackerDrop = {
+  index: number;
+  playerIdx: 0 | 1;
+  craneX: number;
+  craneTime: number;
+  shape: NeonStackerShape;
+  at: number;
+};
+
+type NeonStackerState = {
+  gameId: "neon-stacker";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  nextPlayerIdx: 0 | 1;
+  dropCount: number;
+  level: number;
+  playerDropCounts: [number, number];
+  winnerIdx: 0 | 1 | null;
+  lastDrop: NeonStackerDrop | null;
+  startedAt: number;
+};
+
 type ActiveGame =
   | TicTacToeState
   | ConnectFourState
   | HangmanState
-  | BattleshipInternal;
+  | BattleshipInternal
+  | NeonStackerState;
 
 type Room = {
   code: string;
@@ -405,6 +438,7 @@ function validateFleetPlacement(
 
 function isGameOver(game: ActiveGame): boolean {
   if (game.gameId === "battleship") return game.winnerIdx !== null;
+  if (game.gameId === "neon-stacker") return game.winnerIdx !== null;
   return game.winner !== null;
 }
 
@@ -480,6 +514,20 @@ async function persistGameEnd(room: Room, game: ActiveGame, io: Server): Promise
           clientId: winnerClientId,
           delta: 25,
           reason: "neon-fleet win",
+        });
+      }
+    } else if (game.gameId === "neon-stacker") {
+      if (game.winnerIdx !== null) {
+        outcome = "win";
+        winnerClientId = game.players[game.winnerIdx].clientId;
+        loserClientId =
+          game.winnerIdx === 0
+            ? game.players[1].clientId
+            : game.players[0].clientId;
+        pointsAwards.push({
+          clientId: winnerClientId,
+          delta: 20,
+          reason: "neon-stacker win",
         });
       }
     }
@@ -848,6 +896,21 @@ io.on("connection", (socket: Socket) => {
         winnerIdx: null,
         startedAt: Date.now(),
       };
+    } else if (gameId === "neon-stacker") {
+      game = {
+        gameId: "neon-stacker",
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        nextPlayerIdx: 0,
+        dropCount: 0,
+        level: 1,
+        playerDropCounts: [0, 0],
+        winnerIdx: null,
+        lastDrop: null,
+        startedAt: Date.now(),
+      };
     } else {
       return; // unknown game id
     }
@@ -863,7 +926,7 @@ io.on("connection", (socket: Socket) => {
       cellIndex?: number;
       column?: number;
       letter?: string;
-      action?: "place" | "fire";
+      action?: "place" | "fire" | "drop" | "reportGameOver";
       ships?: {
         name: string;
         len: number;
@@ -873,6 +936,12 @@ io.on("connection", (socket: Socket) => {
       }[];
       x?: number;
       y?: number;
+      // neon-stacker drop
+      craneX?: number;
+      craneTime?: number;
+      shape?: { width: number; height: number; name: string };
+      // neon-stacker reportGameOver
+      loserIdx?: 0 | 1;
     }) => {
       if (!joinedCode) return;
       const room = rooms.get(joinedCode);
@@ -1019,6 +1088,61 @@ io.on("connection", (socket: Socket) => {
           } else {
             game.turnIdx = oppIdx;
           }
+          changed = true;
+        }
+      } else if (game.gameId === "neon-stacker") {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+
+        if (payload?.action === "drop") {
+          if (game.nextPlayerIdx !== myIdx) return;
+          const craneX = payload.craneX;
+          const craneTime = payload.craneTime;
+          const shape = payload.shape;
+          if (
+            typeof craneX !== "number" ||
+            typeof craneTime !== "number" ||
+            !shape ||
+            typeof shape.width !== "number" ||
+            typeof shape.height !== "number" ||
+            typeof shape.name !== "string"
+          ) {
+            return;
+          }
+          game.dropCount += 1;
+          game.playerDropCounts[myIdx] += 1;
+          // Level up every 5 drops — matches Chris's spec.
+          if (game.dropCount > 0 && game.dropCount % 5 === 0) {
+            game.level += 1;
+          }
+          game.lastDrop = {
+            index: game.dropCount,
+            playerIdx: myIdx,
+            craneX,
+            craneTime,
+            shape: {
+              width: shape.width,
+              height: shape.height,
+              name: shape.name,
+            },
+            at: Date.now(),
+          };
+          game.nextPlayerIdx = myIdx === 0 ? 1 : 0;
+          changed = true;
+        } else if (payload?.action === "reportGameOver") {
+          // Client-reported game over. The loser is whoever made the
+          // last drop — their block caused the tower to collapse.
+          // Both clients may report concurrently; the winnerIdx guard
+          // below makes this idempotent so only the first one wins.
+          if (game.winnerIdx !== null) return; // already ended
+          if (!game.lastDrop) return;
+          const loserIdx = game.lastDrop.playerIdx;
+          game.winnerIdx = loserIdx === 0 ? 1 : 0;
           changed = true;
         }
       } else if (game.gameId === "hangman") {

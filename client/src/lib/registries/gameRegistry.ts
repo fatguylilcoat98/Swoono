@@ -3,6 +3,7 @@ import TicTacToeGame from "../../components/games/modules/tic-tac-toe/TicTacToeG
 import ConnectFourGame from "../../components/games/modules/connect-four/ConnectFourGame";
 import HangmanGame from "../../components/games/modules/hangman/HangmanGame";
 import BattleshipGame from "../../components/games/modules/battleship/BattleshipGame";
+import NeonStackerGame from "../../components/games/modules/neon-stacker/NeonStackerGame";
 
 export type GameCategory = "arcade" | "couples";
 
@@ -125,6 +126,18 @@ registerGame({
   pointsOnWin: 25,
   status: "ready",
   component: BattleshipGame,
+});
+
+registerGame({
+  id: "neon-stacker",
+  name: "Neon Stacker",
+  category: "arcade",
+  description: "Physics tower builder. Stack blocks, rotate levels, don't let it fall.",
+  emoji: "🧱",
+  tier: 0,
+  pointsOnWin: 20,
+  status: "ready",
+  component: NeonStackerGame,
 });
 
 // --- Couples ---

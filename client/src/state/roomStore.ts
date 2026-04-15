@@ -49,6 +49,12 @@ type RoomState = {
     }[],
   ) => void;
   fireBattleshipShot: (x: number, y: number) => void;
+  dropNeonStackerBlock: (
+    craneX: number,
+    craneTime: number,
+    shape: { width: number; height: number; name: string },
+  ) => void;
+  reportNeonStackerGameOver: () => void;
   pushLocation: (lat: number, lng: number, accuracyM?: number) => void;
   exitGame: () => void;
 };
@@ -202,6 +208,19 @@ export const useRoomStore = create<RoomState>((set, get) => {
 
     fireBattleshipShot: (x, y) => {
       socket.emit("game:move", { action: "fire", x, y });
+    },
+
+    dropNeonStackerBlock: (craneX, craneTime, shape) => {
+      socket.emit("game:move", {
+        action: "drop",
+        craneX,
+        craneTime,
+        shape,
+      });
+    },
+
+    reportNeonStackerGameOver: () => {
+      socket.emit("game:move", { action: "reportGameOver" });
     },
 
     pushLocation: (lat, lng, accuracyM) => {
