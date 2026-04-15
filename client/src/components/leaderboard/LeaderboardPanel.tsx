@@ -5,13 +5,13 @@ import { usePointsStore } from "../../state/pointsStore";
 export default function LeaderboardPanel() {
   const peers = useRoomStore((s) => s.peers);
   const selfId = useRoomStore((s) => s.clientId);
-  const points = usePointsStore((s) => s.points);
+  const peerPoints = useRoomStore((s) => s.peerPoints);
+  const myPoints = usePointsStore((s) => s.points);
 
-  // Placeholder scoring: self is authoritative, partner is 0 until the
-  // server relays game results in Phase 2.
+  // Show real points from peer tracking and local store
   const rows = peers.map((p) => ({
     name: p.name,
-    points: p.clientId === selfId ? points : 0,
+    points: p.clientId === selfId ? myPoints : (peerPoints[p.clientId] || 0),
     self: p.clientId === selfId,
   }));
 
@@ -37,7 +37,7 @@ export default function LeaderboardPanel() {
         ))}
       </div>
       <p className="mt-3 text-[10px] text-swoono-dim/70">
-        Shared scoring syncs in Phase 2.
+        Points sync across sessions and players.
       </p>
     </GlassPanel>
   );

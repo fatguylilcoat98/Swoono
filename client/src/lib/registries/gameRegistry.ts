@@ -121,7 +121,7 @@ registerGame({
   category: "arcade",
   description: "Deluxe 2-player ship combat. Place your fleet, blast theirs.",
   emoji: "🚢",
-  tier: 1,
+  tier: 0,
   pointsOnWin: 25,
   status: "ready",
   component: BattleshipGame,

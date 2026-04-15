@@ -146,3 +146,27 @@ export type ActiveGame =
   | ConnectFourState
   | HangmanState
   | BattleshipState;
+
+// --- Production utility types ---------------------------------------------
+
+export interface ErrorContext {
+  component: string;
+  action: string;
+  data?: unknown;
+}
+
+export interface ProductionConfig {
+  enableErrorReporting: boolean;
+  enableHealthChecks: boolean;
+  enableAnalytics: boolean;
+  apiEndpoint?: string;
+}
+
+export type HealthStatus = 'healthy' | 'warning' | 'error';
+
+export interface SystemCheck {
+  name: string;
+  status: HealthStatus;
+  message: string;
+  timestamp: number;
+}

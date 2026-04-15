@@ -16,28 +16,6 @@ import {
   haversineMeters,
   pointsBalances,
 } from "./db";
-n// ===== INPUT SANITIZATION & SECURITY =====
-function sanitizeString(input: string, maxLength = 256): string {
-  if (!input || typeof input !== "string") return "";
-  return input
-    .replace(/<[^>]*>/g, "")
-    .replace(/[<>&"']/g, (char) => ({
-      "<": "&lt;", ">": "&gt;", "&": "&amp;", 
-      """: "&quot;", "'": "&#x27;"
-    }[char] || char))
-    .trim().slice(0, maxLength);
-}
-
-function sanitizeRoomCode(code: string): string {
-  if (!code || typeof code !== "string") return "";
-  return code.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
-}
-
-function sanitizeDisplayName(name: string): string {
-  const sanitized = sanitizeString(name, 32);
-  return sanitized || "Anonymous";
-}
-
 
 const USE_DB = isDbConfigured();
 
@@ -612,8 +590,8 @@ io.on("connection", (socket: Socket) => {
   let joinedClientId: string | null = null;
 
   socket.on("join", async (payload: JoinPayload, ack?: (res: unknown) => void) => {
-    const rawCode = sanitizeRoomCode(payload?.code || "");
-    const name = sanitizeDisplayName(payload?.name || "");
+    const rawCode = (payload?.code || "").trim().toUpperCase();
+    const name = (payload?.name || "").trim().slice(0, 32) || "Anonymous";
     const clientId = payload?.clientId || makeId();
 
     if (!rawCode) {
@@ -644,7 +622,7 @@ io.on("connection", (socket: Socket) => {
         if (message === "room_locked") {
           ack?.({
             ok: false,
-            error: "Room is full (2 players maximum)",
+            error: "Room is private — locked to the two people already in it",
           });
           return;
         }
@@ -658,7 +636,7 @@ io.on("connection", (socket: Socket) => {
         if (room.owners.length >= MAX_PEERS_PER_ROOM) {
           ack?.({
             ok: false,
-            error: "Room is full (2 players maximum)",
+            error: "Room is private — locked to the two people already in it",
           });
           return;
         }
@@ -717,21 +695,11 @@ io.on("connection", (socket: Socket) => {
     );
     if (!me) return;
 
-    const text = sanitizeString(payload?.text || "", 500);
-    if (!text.trim()) return;
-    const color = sanitizeString(payload?.color || "yellow", 20);
-    const text = sanitizeString(payload?.text || "", 500);
-    if (!text.trim()) return;
-    const color = sanitizeString(payload?.color || "yellow", 20);
-    const text = sanitizeString(payload?.text || "", 500);
-    if (!text.trim()) return;
-    const color = sanitizeString(payload?.color || "yellow", 20);
-    const text = sanitizeString(payload?.text || "", 500);
-    if (!text.trim()) return;
-    const color = sanitizeString(payload?.color || "yellow", 20);
-    const text = sanitizeString(payload?.text || "", 500);
-    if (!text.trim()) return;
-    const color = sanitizeString(payload?.color || "yellow", 20);
+    const text = String(payload?.text || "")
+      .trim()
+      .slice(0, 280);
+    if (!text) return;
+    const color = String(payload?.color || "yellow").slice(0, 20);
 
     let note: Note;
 

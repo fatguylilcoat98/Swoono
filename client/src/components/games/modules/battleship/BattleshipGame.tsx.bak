@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useRoomStore } from "../../../../state/roomStore";
 import { triggerEffect } from "../../../../lib/registries/effectRegistry";
 import type { GameContextProps } from "../../../../lib/registries/gameRegistry";
-import { playBattleshipHit, playBattleshipMiss, playBattleshipSunk, playBattleshipRadar, playButtonClick, playButtonHover } from "../../../../lib/sounds";
 import type { BattleshipState } from "../../../../lib/types";
 
 // --- Constants ------------------------------------------------------------

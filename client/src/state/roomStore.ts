@@ -5,6 +5,7 @@ import {
   triggerEffect,
   type EffectPayload,
 } from "../lib/registries/effectRegistry";
+import { usePointsStore } from "./pointsStore";
 
 type RoomState = {
   // identity
@@ -25,6 +26,9 @@ type RoomState = {
   // distance apart (meters, computed on server)
   distanceMeters: number | null;
   distanceUpdatedAt: number | null;
+
+  // points tracking for all peers
+  peerPoints: Record<string, number>;
 
   // actions
   setDisplayName: (name: string) => void;
@@ -95,6 +99,19 @@ export const useRoomStore = create<RoomState>((set, get) => {
     },
   );
 
+  // Listen for points sync from server
+  socket.on("points:sync", ({ clientId, points }: { clientId: string; points: number }) => {
+    // Update peer points tracking for all clients
+    set((s) => ({
+      peerPoints: { ...s.peerPoints, [clientId]: points }
+    }));
+
+    // Also sync to the points store if it's our client ID
+    if (clientId === CLIENT_ID) {
+      usePointsStore.getState().syncFromServer(points);
+    }
+  });
+
   return {
     clientId: CLIENT_ID,
     displayName: "",
@@ -107,6 +124,7 @@ export const useRoomStore = create<RoomState>((set, get) => {
     activeGame: null,
     distanceMeters: null,
     distanceUpdatedAt: null,
+    peerPoints: {},
 
     setDisplayName: (name) => set({ displayName: name }),
 
@@ -152,6 +170,7 @@ export const useRoomStore = create<RoomState>((set, get) => {
         distanceMeters: null,
         distanceUpdatedAt: null,
         joinError: null,
+        peerPoints: {},
       });
     },
 

@@ -12,6 +12,7 @@ type PointsState = {
   history: PointEvent[];
   award: (delta: number, reason: string) => void;
   spend: (delta: number, reason: string) => boolean;
+  syncFromServer: (serverPoints: number) => void;
 };
 
 function makeEventId() {
@@ -19,7 +20,7 @@ function makeEventId() {
 }
 
 export const usePointsStore = create<PointsState>((set, get) => ({
-  points: 50, // starter balance so placeholder UI isn't empty
+  points: 0, // Start at 0, sync from server
   history: [],
   award: (delta, reason) => {
     const cost = Math.abs(delta);
@@ -48,5 +49,8 @@ export const usePointsStore = create<PointsState>((set, get) => ({
       history: [...s.history, event],
     }));
     return true;
+  },
+  syncFromServer: (serverPoints) => {
+    set({ points: serverPoints });
   },
 }));
