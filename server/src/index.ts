@@ -134,6 +134,299 @@ type BattleshipInternal = {
   startedAt: number;
 };
 
+// --- Prompt game (Truth or Dare / Spicy Zone shared engine) ---
+
+type PromptType = "truth" | "dare";
+
+type PromptGameState = {
+  gameId: "truth-or-dare" | "spicy-zone";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  turnIdx: 0 | 1;
+  currentPrompt: { type: PromptType; text: string } | null;
+  roundsCompleted: number;
+  totalRounds: number;
+  winner: "win" | null;
+  startedAt: number;
+};
+
+const TOD_TRUTHS: string[] = [
+  "What's the most embarrassing song on your playlist right now?",
+  "What's one thing you've never told your partner but want to?",
+  "What's your most irrational fear?",
+  "What's the worst lie you've ever told?",
+  "If you had to re-live one day of your life, which one?",
+  "What's your guilty pleasure TV show?",
+  "What's something you did as a teenager that you'd be horrified to admit now?",
+  "Who was your first crush?",
+  "What's the most childish thing you still do?",
+  "What would you do if you could be invisible for a day?",
+  "What's one habit of your partner's that drives you secretly crazy?",
+  "When was the last time you cried and why?",
+  "What's the worst gift you've ever received?",
+  "What's a belief you used to hold that you've changed your mind about?",
+  "If you had to pick one superpower, what would it be and why?",
+  "What's your most toxic trait you're actually working on?",
+  "What's the pettiest thing you've ever done in an argument?",
+  "What celebrity crush are you too embarrassed to admit?",
+  "What's one thing you googled this week that you'd never say out loud?",
+  "What's the weirdest thing you've ever eaten on a dare?",
+  "What was your most awkward first-date moment?",
+  "What's the dumbest thing you've spent money on?",
+  "What's a compliment you hate getting?",
+  "If you had 24 hours to do anything with no consequences, what?",
+  "What's your partner's most attractive non-physical trait?",
+  "What's one thing you wish you'd done by now?",
+  "What's your pettiest hill you will die on?",
+  "Name one thing you've lied about on a resume.",
+  "What's the meanest thing you've said to someone and regretted?",
+  "What's your weirdest recurring dream?",
+];
+
+const TOD_DARES: string[] = [
+  "Do your best impression of your partner for 30 seconds.",
+  "Text a friend saying 'I need to confess something' then say 'nvm' when they ask.",
+  "Do 15 pushups right now.",
+  "Let your partner post anything they want on your social media for the next 60 seconds.",
+  "Give your partner a 30-second foot rub.",
+  "Sing the chorus of the last song you listened to.",
+  "Do your best dance move for 20 seconds.",
+  "Let your partner style your hair any way they want.",
+  "Write a haiku about your partner in 60 seconds and read it out loud.",
+  "Do a full cartwheel (or attempt — points for effort).",
+  "Call someone and say 'I can't talk right now, I'm being held hostage by my partner for a dare.' Then hang up.",
+  "Let your partner pick your outfit for tomorrow.",
+  "Say three nice things about your partner in a dramatic movie-trailer voice.",
+  "Do your most convincing cry for 15 seconds.",
+  "Eat a spoonful of something your partner picks from the fridge.",
+  "Attempt to juggle for 30 seconds with whatever's in reach.",
+  "Send your partner a selfie with the worst face you can make.",
+  "Talk in only questions for the next 2 minutes.",
+  "Do a handstand against a wall. (Or attempt.)",
+  "Let your partner draw on your face with a marker for 20 seconds.",
+  "Do your best animal impression and let your partner guess.",
+  "Eat the next thing you drink from a bowl with a spoon.",
+  "Send a voice message to a friend of just laughter.",
+  "Act out a scene from the last movie you watched — your partner has to guess.",
+  "Balance a book on your head and walk across the room.",
+  "Do 10 jumping jacks while spelling your partner's full name.",
+  "Let your partner give you a new pet name and you have to use it until the next round.",
+  "Let your partner pick your profile picture — they get final say.",
+  "Do a 30-second freestyle rap about this game.",
+  "Pick up anything random and use it as a microphone for a song of your partner's choice.",
+];
+
+const SPICY_TRUTHS: string[] = [
+  "What part of your partner do you find most attractive?",
+  "What's a compliment you wish your partner gave you more?",
+  "What's the most romantic thing you've ever done for someone?",
+  "What's one thing that always puts you in the mood?",
+  "What's your love language — and when did you last feel it from your partner?",
+  "What's a small thing your partner does that melts you?",
+  "What was the moment you first realized you were into them?",
+  "What's your idea of the perfect slow morning together?",
+  "What's a fantasy you've never told anyone?",
+  "What's the most spontaneous thing you'd want to do with your partner?",
+  "What song makes you think of them?",
+  "Where would you want to be kissed right now?",
+  "What's your partner's best kiss style?",
+  "What's the last text you read from them that gave you butterflies?",
+  "What's something romantic you've been wanting to ask for?",
+  "What's the sexiest thing that isn't physical?",
+  "When did you last feel truly wanted?",
+  "What outfit of theirs do you love the most?",
+  "What part of your relationship feels the most alive right now?",
+  "What's a memory with them you replay often?",
+  "What's one thing you'd change about a date night this week?",
+  "What's your partner's secret superpower in the relationship?",
+  "What's a turn-on that surprises you?",
+  "When did you first feel like 'yeah, this is my person'?",
+  "What's a compliment you've been holding back?",
+];
+
+const SPICY_DARES: string[] = [
+  "Give your partner a slow 30-second hug, no talking.",
+  "Whisper one thing you love about them into their ear.",
+  "Kiss your partner somewhere that's not their mouth.",
+  "Tell your partner the exact moment you fell for them.",
+  "Hold eye contact for 60 seconds without saying anything.",
+  "Massage your partner's shoulders for 60 seconds.",
+  "Slow-dance to one full song — no phones.",
+  "Write a 3-word love note and hand it to them.",
+  "Give your partner a compliment about a body part they're shy about.",
+  "Cuddle for a full 2 minutes with no distractions.",
+  "Send your partner one genuinely romantic text, right now.",
+  "Run your fingers through their hair for 30 seconds.",
+  "Kiss them the way you'd kiss them on a first date.",
+  "Hold their hand and tell them three things you're grateful for.",
+  "Read your partner's favorite poem or lyric out loud to them.",
+  "Pick one of your partner's features and describe it like a poet.",
+  "Give them your most honest 'what I wish we did more of' answer.",
+  "Share one fantasy date idea — big or small.",
+  "Light a candle (or turn the lights low) and sit quietly together for a minute.",
+  "Tell them the first thing you ever noticed about them physically.",
+  "Describe their laugh to them.",
+  "Give them one minute of undivided attention with no screens.",
+  "Rest your head on their chest for 30 seconds and just listen.",
+  "Ask 'what's one thing you want more of from me?' and actually listen.",
+  "Kiss their hand like it's the first time.",
+];
+
+function pickPrompt(
+  gameId: "truth-or-dare" | "spicy-zone",
+  type: PromptType,
+): string {
+  const bank =
+    gameId === "truth-or-dare"
+      ? type === "truth"
+        ? TOD_TRUTHS
+        : TOD_DARES
+      : type === "truth"
+        ? SPICY_TRUTHS
+        : SPICY_DARES;
+  return bank[Math.floor(Math.random() * bank.length)];
+}
+
+// --- Loving Quest (cooperative sequence) ---
+
+type LovingQuestState = {
+  gameId: "loving-quest";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  prompts: string[];
+  currentIdx: number;
+  doneFlags: [boolean, boolean];
+  winner: "done" | null;
+  startedAt: number;
+};
+
+const LOVING_QUEST_BANK: string[] = [
+  "Tell each other one thing you love about the other, out loud, right now.",
+  "Hold hands and take three slow breaths together.",
+  "Share one favorite memory of you two together.",
+  "Look each other in the eye for 30 seconds. No phones, no words.",
+  "Name one thing you're looking forward to doing together next.",
+  "Give each other one real, long hug — at least 20 seconds.",
+  "Say 'thank you for…' and finish it out loud.",
+  "Each pick one song that reminds you of the other. Play a bit of both.",
+  "Trade one small secret you've never told each other.",
+  "Make each other laugh — worst joke wins.",
+  "Describe the other person's smile in one sentence.",
+  "Share one thing you've been meaning to tell the other.",
+  "Each say one goal you want to work on this month, together or alone.",
+  "Kiss gently — just one — and keep going.",
+  "Agree on one thing you'll do together this weekend, big or small.",
+];
+
+function pickLovingQuestPrompts(n: number): string[] {
+  const shuffled = [...LOVING_QUEST_BANK].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
+// --- Word Chain ---
+
+type WordChainEntry = {
+  word: string;
+  playerIdx: 0 | 1;
+};
+
+type WordChainState = {
+  gameId: "word-chain";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  turnIdx: 0 | 1;
+  nextLetter: string;
+  history: WordChainEntry[];
+  winnerIdx: 0 | 1 | null;
+  startedAt: number;
+};
+
+function randomStartLetter(): string {
+  // Pick from common-starting letters — avoid X, Q, Z, Y which are brutal
+  // to start chains with.
+  const letters = "ABCDEFGHIJKLMNOPRSTUVW";
+  return letters[Math.floor(Math.random() * letters.length)];
+}
+
+// --- Trivia (competitive multiple choice race) ---
+
+type TriviaQuestion = {
+  id: string;
+  text: string;
+  choices: string[];
+  correctIdx: number;
+  category?: string;
+};
+
+type TriviaState = {
+  gameId: "trivia";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  questions: TriviaQuestion[];
+  currentIdx: number;
+  lockedOut: [boolean, boolean];
+  scores: [number, number];
+  winner: "win" | "draw" | null;
+  winnerIdx: 0 | 1 | null;
+  startedAt: number;
+};
+
+const TRIVIA_BANK: TriviaQuestion[] = [
+  { id: "tv-01", text: "Which planet is known as the Red Planet?", choices: ["Venus", "Mars", "Jupiter", "Saturn"], correctIdx: 1, category: "Science" },
+  { id: "tv-02", text: "What's the capital of Australia?", choices: ["Sydney", "Melbourne", "Canberra", "Perth"], correctIdx: 2, category: "Geography" },
+  { id: "tv-03", text: "Who painted the Mona Lisa?", choices: ["Michelangelo", "Leonardo da Vinci", "Raphael", "Donatello"], correctIdx: 1, category: "Art" },
+  { id: "tv-04", text: "What's the largest ocean on Earth?", choices: ["Atlantic", "Indian", "Arctic", "Pacific"], correctIdx: 3, category: "Geography" },
+  { id: "tv-05", text: "In what year did World War II end?", choices: ["1943", "1944", "1945", "1946"], correctIdx: 2, category: "History" },
+  { id: "tv-06", text: "What element has the chemical symbol 'Au'?", choices: ["Silver", "Gold", "Aluminum", "Argon"], correctIdx: 1, category: "Science" },
+  { id: "tv-07", text: "Which is the smallest prime number?", choices: ["0", "1", "2", "3"], correctIdx: 2, category: "Math" },
+  { id: "tv-08", text: "Who wrote 'Romeo and Juliet'?", choices: ["Dickens", "Shakespeare", "Chaucer", "Austen"], correctIdx: 1, category: "Literature" },
+  { id: "tv-09", text: "How many continents are there?", choices: ["5", "6", "7", "8"], correctIdx: 2, category: "Geography" },
+  { id: "tv-10", text: "What's the tallest mountain in the world?", choices: ["K2", "Everest", "Kangchenjunga", "Denali"], correctIdx: 1, category: "Geography" },
+  { id: "tv-11", text: "Which country invented pizza?", choices: ["France", "Greece", "Italy", "Spain"], correctIdx: 2, category: "Food" },
+  { id: "tv-12", text: "What year did the first iPhone release?", choices: ["2005", "2006", "2007", "2008"], correctIdx: 2, category: "Tech" },
+  { id: "tv-13", text: "What's the hardest natural substance?", choices: ["Quartz", "Diamond", "Steel", "Titanium"], correctIdx: 1, category: "Science" },
+  { id: "tv-14", text: "Who painted the ceiling of the Sistine Chapel?", choices: ["Raphael", "Da Vinci", "Michelangelo", "Donatello"], correctIdx: 2, category: "Art" },
+  { id: "tv-15", text: "Which planet has the most moons?", choices: ["Jupiter", "Saturn", "Uranus", "Neptune"], correctIdx: 1, category: "Science" },
+  { id: "tv-16", text: "What's the currency of Japan?", choices: ["Won", "Yuan", "Yen", "Ringgit"], correctIdx: 2, category: "Geography" },
+  { id: "tv-17", text: "What color is a ripe banana's skin right before brown?", choices: ["Green", "Yellow", "Orange", "Red"], correctIdx: 1, category: "Misc" },
+  { id: "tv-18", text: "How many sides does a hexagon have?", choices: ["5", "6", "7", "8"], correctIdx: 1, category: "Math" },
+  { id: "tv-19", text: "Who directed 'Jurassic Park'?", choices: ["George Lucas", "James Cameron", "Steven Spielberg", "Ridley Scott"], correctIdx: 2, category: "Movies" },
+  { id: "tv-20", text: "What's the longest river in the world?", choices: ["Amazon", "Nile", "Yangtze", "Mississippi"], correctIdx: 1, category: "Geography" },
+  { id: "tv-21", text: "Which blood type is the universal donor?", choices: ["A+", "O-", "B+", "AB+"], correctIdx: 1, category: "Science" },
+  { id: "tv-22", text: "How many hearts does an octopus have?", choices: ["1", "2", "3", "4"], correctIdx: 2, category: "Science" },
+  { id: "tv-23", text: "What year did the Berlin Wall fall?", choices: ["1987", "1988", "1989", "1990"], correctIdx: 2, category: "History" },
+  { id: "tv-24", text: "What's the main ingredient in guacamole?", choices: ["Tomato", "Avocado", "Lime", "Onion"], correctIdx: 1, category: "Food" },
+  { id: "tv-25", text: "Who invented the telephone?", choices: ["Edison", "Tesla", "Bell", "Marconi"], correctIdx: 2, category: "History" },
+  { id: "tv-26", text: "What's the rarest blood type?", choices: ["O-", "AB-", "B+", "A-"], correctIdx: 1, category: "Science" },
+  { id: "tv-27", text: "What language has the most native speakers?", choices: ["English", "Spanish", "Mandarin", "Hindi"], correctIdx: 2, category: "Geography" },
+  { id: "tv-28", text: "What's the fastest land animal?", choices: ["Lion", "Cheetah", "Pronghorn", "Ostrich"], correctIdx: 1, category: "Nature" },
+  { id: "tv-29", text: "How many bones are in the adult human body?", choices: ["198", "206", "212", "220"], correctIdx: 1, category: "Science" },
+  { id: "tv-30", text: "What's the chemical symbol for water?", choices: ["Wo", "H2O", "HO2", "H3O"], correctIdx: 1, category: "Science" },
+  { id: "tv-31", text: "Which Greek god is king of the gods?", choices: ["Poseidon", "Hades", "Apollo", "Zeus"], correctIdx: 3, category: "Mythology" },
+  { id: "tv-32", text: "What's the smallest country in the world?", choices: ["Monaco", "Vatican City", "Nauru", "San Marino"], correctIdx: 1, category: "Geography" },
+  { id: "tv-33", text: "Who wrote 'Harry Potter'?", choices: ["Tolkien", "Rowling", "Pullman", "Lewis"], correctIdx: 1, category: "Literature" },
+  { id: "tv-34", text: "What year did humans first land on the moon?", choices: ["1967", "1968", "1969", "1970"], correctIdx: 2, category: "History" },
+  { id: "tv-35", text: "Which instrument has 88 keys?", choices: ["Organ", "Piano", "Harpsichord", "Accordion"], correctIdx: 1, category: "Music" },
+  { id: "tv-36", text: "What's the largest mammal?", choices: ["Elephant", "Blue whale", "Giraffe", "Orca"], correctIdx: 1, category: "Nature" },
+  { id: "tv-37", text: "How many players on a soccer team on the field?", choices: ["9", "10", "11", "12"], correctIdx: 2, category: "Sports" },
+  { id: "tv-38", text: "What's the freezing point of water in Celsius?", choices: ["-10", "0", "10", "32"], correctIdx: 1, category: "Science" },
+  { id: "tv-39", text: "Who painted 'Starry Night'?", choices: ["Monet", "Van Gogh", "Picasso", "Dalí"], correctIdx: 1, category: "Art" },
+  { id: "tv-40", text: "What animal is known as the 'Ship of the Desert'?", choices: ["Horse", "Camel", "Donkey", "Llama"], correctIdx: 1, category: "Nature" },
+];
+
+function pickTriviaQuestions(n: number): TriviaQuestion[] {
+  const shuffled = [...TRIVIA_BANK].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
 // --- Love Trivia (cooperative couples game) ---
 
 type LoveTriviaQuestion = {
@@ -437,7 +730,11 @@ type ActiveGame =
   | HangmanState
   | BattleshipInternal
   | NeonStackerState
-  | LoveTriviaState;
+  | LoveTriviaState
+  | PromptGameState
+  | LovingQuestState
+  | WordChainState
+  | TriviaState;
 
 type Room = {
   code: string;
@@ -706,7 +1003,12 @@ function validateFleetPlacement(
 function isGameOver(game: ActiveGame): boolean {
   if (game.gameId === "battleship") return game.winnerIdx !== null;
   if (game.gameId === "neon-stacker") return game.winnerIdx !== null;
+  if (game.gameId === "word-chain") return game.winnerIdx !== null;
+  if (game.gameId === "trivia") return game.winner !== null;
   if (game.gameId === "love-trivia") return game.winner !== null;
+  if (game.gameId === "truth-or-dare") return game.winner !== null;
+  if (game.gameId === "spicy-zone") return game.winner !== null;
+  if (game.gameId === "loving-quest") return game.winner !== null;
   return game.winner !== null;
 }
 
@@ -800,8 +1102,6 @@ async function persistGameEnd(room: Room, game: ActiveGame, io: Server): Promise
       }
     } else if (game.gameId === "love-trivia") {
       if (game.winner === "done") {
-        // Cooperative — both players get points scaled to how many
-        // rounds they matched on. Max 10 matches = 20 points each.
         outcome = "coop-win";
         const pointsEach = Math.min(20, game.matchedCount * 2);
         if (pointsEach > 0) {
@@ -813,6 +1113,62 @@ async function persistGameEnd(room: Room, game: ActiveGame, io: Server): Promise
             });
           }
         }
+      }
+    } else if (
+      game.gameId === "truth-or-dare" ||
+      game.gameId === "spicy-zone"
+    ) {
+      if (game.winner === "win") {
+        // Cooperative — both players score just for finishing.
+        outcome = "coop-win";
+        for (const p of game.players) {
+          pointsAwards.push({
+            clientId: p.clientId,
+            delta: 10,
+            reason: `${game.gameId} finished`,
+          });
+        }
+      }
+    } else if (game.gameId === "loving-quest") {
+      if (game.winner === "done") {
+        outcome = "coop-win";
+        for (const p of game.players) {
+          pointsAwards.push({
+            clientId: p.clientId,
+            delta: 15,
+            reason: "loving-quest completed",
+          });
+        }
+      }
+    } else if (game.gameId === "word-chain") {
+      if (game.winnerIdx !== null) {
+        outcome = "win";
+        winnerClientId = game.players[game.winnerIdx].clientId;
+        loserClientId =
+          game.winnerIdx === 0
+            ? game.players[1].clientId
+            : game.players[0].clientId;
+        pointsAwards.push({
+          clientId: winnerClientId,
+          delta: 18,
+          reason: "word-chain win",
+        });
+      }
+    } else if (game.gameId === "trivia") {
+      if (game.winner === "draw") {
+        outcome = "draw";
+      } else if (game.winner === "win" && game.winnerIdx !== null) {
+        outcome = "win";
+        winnerClientId = game.players[game.winnerIdx].clientId;
+        loserClientId =
+          game.winnerIdx === 0
+            ? game.players[1].clientId
+            : game.players[0].clientId;
+        pointsAwards.push({
+          clientId: winnerClientId,
+          delta: 20,
+          reason: "trivia win",
+        });
       }
     }
 
@@ -1210,6 +1566,61 @@ io.on("connection", (socket: Socket) => {
         winner: null,
         startedAt: Date.now(),
       };
+    } else if (gameId === "truth-or-dare" || gameId === "spicy-zone") {
+      game = {
+        gameId,
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        turnIdx: 0,
+        currentPrompt: null,
+        roundsCompleted: 0,
+        totalRounds: 10,
+        winner: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "loving-quest") {
+      game = {
+        gameId: "loving-quest",
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        prompts: pickLovingQuestPrompts(6),
+        currentIdx: 0,
+        doneFlags: [false, false],
+        winner: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "word-chain") {
+      game = {
+        gameId: "word-chain",
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        turnIdx: 0,
+        nextLetter: randomStartLetter(),
+        history: [],
+        winnerIdx: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "trivia") {
+      game = {
+        gameId: "trivia",
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        questions: pickTriviaQuestions(10),
+        currentIdx: 0,
+        lockedOut: [false, false],
+        scores: [0, 0],
+        winner: null,
+        winnerIdx: null,
+        startedAt: Date.now(),
+      };
     } else {
       return; // unknown game id
     }
@@ -1225,7 +1636,18 @@ io.on("connection", (socket: Socket) => {
       cellIndex?: number;
       column?: number;
       letter?: string;
-      action?: "place" | "fire" | "drop" | "reportGameOver" | "answer";
+      action?:
+        | "place"
+        | "fire"
+        | "drop"
+        | "reportGameOver"
+        | "answer"
+        | "pickPrompt"
+        | "completePrompt"
+        | "skipPrompt"
+        | "markDone"
+        | "submitWord"
+        | "forfeit";
       ships?: {
         name: string;
         len: number;
@@ -1241,8 +1663,12 @@ io.on("connection", (socket: Socket) => {
       shape?: { width: number; height: number; name: string };
       // neon-stacker reportGameOver
       loserIdx?: 0 | 1;
-      // love-trivia answer
+      // love-trivia / trivia
       choice?: number;
+      // truth-or-dare / spicy-zone
+      promptType?: "truth" | "dare";
+      // word-chain
+      word?: string;
     }) => {
       if (!joinedCode) return;
       const room = rooms.get(joinedCode);
@@ -1388,6 +1814,151 @@ io.on("connection", (socket: Socket) => {
             game.winnerIdx = myIdx;
           } else {
             game.turnIdx = oppIdx;
+          }
+          changed = true;
+        }
+      } else if (
+        game.gameId === "truth-or-dare" ||
+        game.gameId === "spicy-zone"
+      ) {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+        if (game.winner !== null) return;
+
+        if (payload?.action === "pickPrompt") {
+          // Only the active player picks
+          if (myIdx !== game.turnIdx) return;
+          const type = payload.promptType;
+          if (type !== "truth" && type !== "dare") return;
+          if (game.currentPrompt) return; // already picked
+          game.currentPrompt = {
+            type,
+            text: pickPrompt(game.gameId, type),
+          };
+          changed = true;
+        } else if (payload?.action === "completePrompt") {
+          if (myIdx !== game.turnIdx) return;
+          if (!game.currentPrompt) return;
+          game.currentPrompt = null;
+          game.roundsCompleted += 1;
+          game.turnIdx = myIdx === 0 ? 1 : 0;
+          if (game.roundsCompleted >= game.totalRounds) {
+            game.winner = "win";
+          }
+          changed = true;
+        } else if (payload?.action === "skipPrompt") {
+          // Chicken out — swap to the other type without ending the round
+          if (myIdx !== game.turnIdx) return;
+          if (!game.currentPrompt) return;
+          const next: PromptType =
+            game.currentPrompt.type === "truth" ? "dare" : "truth";
+          game.currentPrompt = { type: next, text: pickPrompt(game.gameId, next) };
+          changed = true;
+        }
+      } else if (game.gameId === "loving-quest") {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+        if (game.winner !== null) return;
+
+        if (payload?.action === "markDone") {
+          game.doneFlags[myIdx] = true;
+          if (game.doneFlags[0] && game.doneFlags[1]) {
+            game.currentIdx += 1;
+            game.doneFlags = [false, false];
+            if (game.currentIdx >= game.prompts.length) {
+              game.winner = "done";
+            }
+          }
+          changed = true;
+        }
+      } else if (game.gameId === "word-chain") {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+        if (game.winnerIdx !== null) return;
+
+        if (payload?.action === "submitWord") {
+          if (myIdx !== game.turnIdx) return;
+          const raw = String(payload.word || "").trim().toLowerCase();
+          // Validation: letters only, min length 2, must start with nextLetter,
+          // must not have been used before.
+          if (!/^[a-z]{2,}$/.test(raw)) return;
+          if (raw[0] !== game.nextLetter.toLowerCase()) return;
+          if (game.history.some((h) => h.word === raw)) return;
+
+          game.history.push({ word: raw, playerIdx: myIdx });
+          game.nextLetter = raw[raw.length - 1].toUpperCase();
+          game.turnIdx = myIdx === 0 ? 1 : 0;
+          changed = true;
+        } else if (payload?.action === "forfeit") {
+          if (myIdx !== game.turnIdx) return;
+          // You forfeit = the OTHER player wins
+          game.winnerIdx = myIdx === 0 ? 1 : 0;
+          changed = true;
+        }
+      } else if (game.gameId === "trivia") {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+        if (game.winner !== null) return;
+
+        if (payload?.action === "answer") {
+          const choice = payload.choice;
+          if (
+            typeof choice !== "number" ||
+            choice < 0 ||
+            choice > 3
+          )
+            return;
+          if (game.lockedOut[myIdx]) return;
+          const q = game.questions[game.currentIdx];
+          if (!q) return;
+
+          game.lockedOut[myIdx] = true;
+          if (choice === q.correctIdx) {
+            // First to correct wins the round
+            game.scores[myIdx] += 10;
+            // Advance to next question
+            game.currentIdx += 1;
+            game.lockedOut = [false, false];
+          } else {
+            // Wrong — stay locked out until the round ends. If both are
+            // locked out (both wrong), move on.
+            if (game.lockedOut[0] && game.lockedOut[1]) {
+              game.currentIdx += 1;
+              game.lockedOut = [false, false];
+            }
+          }
+
+          // End of game?
+          if (game.currentIdx >= game.questions.length) {
+            if (game.scores[0] > game.scores[1]) {
+              game.winner = "win";
+              game.winnerIdx = 0;
+            } else if (game.scores[1] > game.scores[0]) {
+              game.winner = "win";
+              game.winnerIdx = 1;
+            } else {
+              game.winner = "draw";
+            }
           }
           changed = true;
         }

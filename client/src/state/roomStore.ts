@@ -57,6 +57,13 @@ type RoomState = {
   ) => void;
   reportNeonStackerGameOver: () => void;
   submitLoveTriviaAnswer: (choice: number) => void;
+  pickPrompt: (promptType: "truth" | "dare") => void;
+  completePrompt: () => void;
+  skipPrompt: () => void;
+  markLovingQuestDone: () => void;
+  submitWordChainWord: (word: string) => void;
+  forfeitWordChain: () => void;
+  submitTriviaAnswer: (choice: number) => void;
   pushLocation: (lat: number, lng: number, accuracyM?: number) => void;
   exitGame: () => void;
 };
@@ -271,6 +278,34 @@ export const useRoomStore = create<RoomState>((set, get) => {
     },
 
     submitLoveTriviaAnswer: (choice) => {
+      socket.emit("game:move", { action: "answer", choice });
+    },
+
+    pickPrompt: (promptType: "truth" | "dare") => {
+      socket.emit("game:move", { action: "pickPrompt", promptType });
+    },
+
+    completePrompt: () => {
+      socket.emit("game:move", { action: "completePrompt" });
+    },
+
+    skipPrompt: () => {
+      socket.emit("game:move", { action: "skipPrompt" });
+    },
+
+    markLovingQuestDone: () => {
+      socket.emit("game:move", { action: "markDone" });
+    },
+
+    submitWordChainWord: (word: string) => {
+      socket.emit("game:move", { action: "submitWord", word });
+    },
+
+    forfeitWordChain: () => {
+      socket.emit("game:move", { action: "forfeit" });
+    },
+
+    submitTriviaAnswer: (choice: number) => {
       socket.emit("game:move", { action: "answer", choice });
     },
 

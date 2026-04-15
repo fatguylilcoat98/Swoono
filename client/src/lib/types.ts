@@ -140,6 +140,97 @@ export type BattleshipState = {
   startedAt: number;
 };
 
+// --- Prompt game (Truth or Dare / Spicy Zone shared engine) ---
+
+export type PromptType = "truth" | "dare";
+
+export type PromptGameState = {
+  gameId: "truth-or-dare" | "spicy-zone";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  /** Whose turn to pick + perform */
+  turnIdx: 0 | 1;
+  /** The prompt shown right now (null between rounds) */
+  currentPrompt: { type: PromptType; text: string } | null;
+  /** Rounds completed */
+  roundsCompleted: number;
+  /** How many rounds total this game */
+  totalRounds: number;
+  /** "win" once the full game is played */
+  winner: "win" | null;
+  startedAt: number;
+};
+
+// --- Loving Quest (cooperative sequence) ---
+
+export type LovingQuestState = {
+  gameId: "loving-quest";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  prompts: string[];
+  currentIdx: number;
+  /** Both players must tap Done to advance. */
+  doneFlags: [boolean, boolean];
+  winner: "done" | null;
+  startedAt: number;
+};
+
+// --- Word Chain (turn-based word linking) ---
+
+export type WordChainEntry = {
+  word: string;
+  playerIdx: 0 | 1;
+};
+
+export type WordChainState = {
+  gameId: "word-chain";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  turnIdx: 0 | 1;
+  /** Required starting letter for the next word */
+  nextLetter: string;
+  history: WordChainEntry[];
+  /** Winner index (the one who didn't forfeit) */
+  winnerIdx: 0 | 1 | null;
+  startedAt: number;
+};
+
+// --- Trivia (competitive multiple choice race) ---
+
+export type TriviaQuestion = {
+  id: string;
+  text: string;
+  choices: string[];
+  /** Index of the correct choice (0-3). Kept on both sides for display. */
+  correctIdx: number;
+  category?: string;
+};
+
+export type TriviaState = {
+  gameId: "trivia";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  questions: TriviaQuestion[];
+  currentIdx: number;
+  /** Players who have already answered (correctly or wrongly) this round */
+  lockedOut: [boolean, boolean];
+  /** Running scores */
+  scores: [number, number];
+  /** "win" | "draw" | null */
+  winner: "win" | "draw" | null;
+  /** Winner index if winner === "win" */
+  winnerIdx: 0 | 1 | null;
+  startedAt: number;
+};
+
 // --- Love Trivia (cooperative couples game) ---
 
 export type LoveTriviaQuestion = {
@@ -231,7 +322,11 @@ export type ActiveGame =
   | HangmanState
   | BattleshipState
   | NeonStackerState
-  | LoveTriviaState;
+  | LoveTriviaState
+  | PromptGameState
+  | LovingQuestState
+  | WordChainState
+  | TriviaState;
 
 // --- Production utility types ---------------------------------------------
 
