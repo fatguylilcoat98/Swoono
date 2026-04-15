@@ -12,6 +12,7 @@ import TiersPanel from "../tiers/TiersPanel";
 import GlassPanel from "../ui/GlassPanel";
 import ModeSwitcher from "../theme/ModeSwitcher";
 import DistanceBadge from "../distance/DistanceBadge";
+import MusicPlayer from "../audio/MusicPlayer";
 import { getGame } from "../../lib/registries/gameRegistry";
 
 type RoomShellProps = {
@@ -70,6 +71,7 @@ export default function RoomShell({ onLeave }: RoomShellProps) {
             <div className="flex items-center gap-4 flex-wrap">
               <PresenceDots me={me?.name} partner={partner?.name} />
               <DistanceBadge />
+              <MusicPlayer />
               <div className="text-swoono-dim text-xs uppercase tracking-widest hidden sm:block">
                 <span className="text-swoono-ink text-base font-medium mr-1">
                   {points}
