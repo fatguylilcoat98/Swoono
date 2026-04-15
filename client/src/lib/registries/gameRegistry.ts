@@ -4,6 +4,7 @@ import ConnectFourGame from "../../components/games/modules/connect-four/Connect
 import HangmanGame from "../../components/games/modules/hangman/HangmanGame";
 import BattleshipGame from "../../components/games/modules/battleship/BattleshipGame";
 import NeonStackerGame from "../../components/games/modules/neon-stacker/NeonStackerGame";
+import LoveTriviaGame from "../../components/games/modules/love-trivia/LoveTriviaGame";
 
 export type GameCategory = "arcade" | "couples";
 
@@ -168,11 +169,13 @@ registerGame({
   id: "love-trivia",
   name: "Love Trivia",
   category: "couples",
-  description: "Firsts, favorites, the little things. About you two.",
+  description:
+    "10 rounds of 'what would your partner pick.' Match to score. Cooperative.",
   emoji: "💭",
-  tier: 1,
+  tier: 0,
   pointsOnWin: 20,
-  status: "placeholder",
+  status: "ready",
+  component: LoveTriviaGame,
 });
 
 registerGame({

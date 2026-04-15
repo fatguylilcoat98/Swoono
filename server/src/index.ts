@@ -6,6 +6,7 @@ import {
   isDbConfigured,
   joinRoom as dbJoinRoom,
   touchRoom as dbTouchRoom,
+  wipeRoom as dbWipeRoom,
   listNotes as dbListNotes,
   insertNote as dbInsertNote,
   recordPoints as dbRecordPoints,
@@ -133,6 +134,271 @@ type BattleshipInternal = {
   startedAt: number;
 };
 
+// --- Love Trivia (cooperative couples game) ---
+
+type LoveTriviaQuestion = {
+  id: string;
+  text: string;
+  choices: string[];
+};
+
+type LoveTriviaRoundResult = {
+  questionId: string;
+  answers: [number, number];
+  matched: boolean;
+};
+
+type LoveTriviaState = {
+  gameId: "love-trivia";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  questions: LoveTriviaQuestion[];
+  currentIdx: number;
+  currentAnswers: [number | null, number | null];
+  matchedCount: number;
+  history: LoveTriviaRoundResult[];
+  winner: "done" | null;
+  startedAt: number;
+};
+
+// Question bank. Each question has 4 choices; the game is cooperative —
+// both players pick what they think their partner prefers, and they
+// score when they match. No "right" answer from the server's view.
+const LOVE_TRIVIA_BANK: LoveTriviaQuestion[] = [
+  {
+    id: "lt-01",
+    text: "The perfect date night is...",
+    choices: [
+      "Cozy night in with takeout",
+      "Fancy dinner out",
+      "Adventurous outdoor thing",
+      "Concert or event",
+    ],
+  },
+  {
+    id: "lt-02",
+    text: "Your partner's ideal vacation is...",
+    choices: ["Tropical beach", "Mountain cabin", "Big city trip", "Road trip"],
+  },
+  {
+    id: "lt-03",
+    text: "Their go-to comfort food is...",
+    choices: ["Pizza", "Pasta", "Mac & cheese", "Tacos"],
+  },
+  {
+    id: "lt-04",
+    text: "Their favorite season is...",
+    choices: ["Spring", "Summer", "Fall", "Winter"],
+  },
+  {
+    id: "lt-05",
+    text: "Their love language is mostly...",
+    choices: [
+      "Words of affirmation",
+      "Physical touch",
+      "Acts of service",
+      "Quality time",
+    ],
+  },
+  {
+    id: "lt-06",
+    text: "On a lazy Sunday they'd rather...",
+    choices: [
+      "Sleep in and cuddle",
+      "Brunch somewhere",
+      "Long walk or hike",
+      "Binge a show",
+    ],
+  },
+  {
+    id: "lt-07",
+    text: "Their favorite way to relax is...",
+    choices: ["Reading", "Video games", "Music", "A long bath"],
+  },
+  {
+    id: "lt-08",
+    text: "The snack they always grab is...",
+    choices: ["Chips", "Chocolate", "Fruit", "Popcorn"],
+  },
+  {
+    id: "lt-09",
+    text: "Their morning starts with...",
+    choices: ["Coffee", "Tea", "Water", "Nothing — just vibes"],
+  },
+  {
+    id: "lt-10",
+    text: "Their worst nightmare social event is...",
+    choices: [
+      "A loud club",
+      "A formal work party",
+      "A big family dinner",
+      "A small talk networking thing",
+    ],
+  },
+  {
+    id: "lt-11",
+    text: "When stressed, they mostly want...",
+    choices: [
+      "To be held",
+      "Space to themselves",
+      "To vent out loud",
+      "A distraction",
+    ],
+  },
+  {
+    id: "lt-12",
+    text: "Their favorite kind of movie is...",
+    choices: ["Action / thriller", "Rom-com", "Horror", "Sci-fi / fantasy"],
+  },
+  {
+    id: "lt-13",
+    text: "If they could only drink one beverage forever...",
+    choices: ["Coffee", "Beer", "Wine", "Diet soda"],
+  },
+  {
+    id: "lt-14",
+    text: "The chore they hate the most is...",
+    choices: ["Dishes", "Laundry", "Vacuuming", "Taking out trash"],
+  },
+  {
+    id: "lt-15",
+    text: "Their dream pet would be...",
+    choices: ["Dog", "Cat", "Something exotic", "No pets ever"],
+  },
+  {
+    id: "lt-16",
+    text: "The compliment they most want to hear is...",
+    choices: [
+      "You're so funny",
+      "You're so smart",
+      "You look amazing",
+      "I love how kind you are",
+    ],
+  },
+  {
+    id: "lt-17",
+    text: "Their guilty-pleasure song is probably...",
+    choices: [
+      "Early 2000s pop",
+      "Throwback country",
+      "A boy band classic",
+      "A cheesy love ballad",
+    ],
+  },
+  {
+    id: "lt-18",
+    text: "Their dream job as a kid was...",
+    choices: ["Astronaut", "Artist", "Doctor / vet", "Athlete"],
+  },
+  {
+    id: "lt-19",
+    text: "At a party they'd usually be...",
+    choices: [
+      "Center of the conversation",
+      "Quiet in a corner",
+      "Helping the host",
+      "Leaving early",
+    ],
+  },
+  {
+    id: "lt-20",
+    text: "Their phone screen time is mostly...",
+    choices: [
+      "Social media",
+      "Games",
+      "Texting friends",
+      "Work / productivity",
+    ],
+  },
+  {
+    id: "lt-21",
+    text: "Their dream breakfast is...",
+    choices: ["Pancakes", "Eggs and bacon", "Avocado toast", "Just coffee"],
+  },
+  {
+    id: "lt-22",
+    text: "The trait they love most in themselves is...",
+    choices: ["Humor", "Loyalty", "Work ethic", "Kindness"],
+  },
+  {
+    id: "lt-23",
+    text: "Their favorite smell is...",
+    choices: [
+      "Fresh laundry",
+      "Campfire",
+      "Baked goods",
+      "Ocean / salt air",
+    ],
+  },
+  {
+    id: "lt-24",
+    text: "The superpower they'd pick is...",
+    choices: ["Flying", "Teleporting", "Reading minds", "Time travel"],
+  },
+  {
+    id: "lt-25",
+    text: "Their ideal birthday gift is...",
+    choices: [
+      "Something handmade",
+      "Experience / trip",
+      "Tech or gadget",
+      "Quiet time with you",
+    ],
+  },
+  {
+    id: "lt-26",
+    text: "They're most likely to cry at...",
+    choices: [
+      "A sad movie",
+      "Animal videos",
+      "A song that hits",
+      "They don't really cry",
+    ],
+  },
+  {
+    id: "lt-27",
+    text: "The dance move they'd pull out is...",
+    choices: ["The sprinkler", "Awkward shuffle", "Confident slow dance", "Full-body commit"],
+  },
+  {
+    id: "lt-28",
+    text: "Their ideal pace through a museum is...",
+    choices: [
+      "Read every plaque",
+      "Skim the highlights",
+      "Gift shop first",
+      "Nope, not a museum person",
+    ],
+  },
+  {
+    id: "lt-29",
+    text: "Their go-to way to show love is...",
+    choices: [
+      "Cooking something",
+      "Long hugs",
+      "Random sweet texts",
+      "Little gifts",
+    ],
+  },
+  {
+    id: "lt-30",
+    text: "The small thing that always makes their day is...",
+    choices: [
+      "A good coffee",
+      "A song they love coming on",
+      "A text from you",
+      "Getting into bed early",
+    ],
+  },
+];
+
+function pickLoveTriviaQuestions(n: number): LoveTriviaQuestion[] {
+  const shuffled = [...LOVE_TRIVIA_BANK].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
 // --- Neon Stacker (physics tower, client-simulated, server-arbitrated) ---
 
 type NeonStackerShape = {
@@ -170,7 +436,8 @@ type ActiveGame =
   | ConnectFourState
   | HangmanState
   | BattleshipInternal
-  | NeonStackerState;
+  | NeonStackerState
+  | LoveTriviaState;
 
 type Room = {
   code: string;
@@ -439,6 +706,7 @@ function validateFleetPlacement(
 function isGameOver(game: ActiveGame): boolean {
   if (game.gameId === "battleship") return game.winnerIdx !== null;
   if (game.gameId === "neon-stacker") return game.winnerIdx !== null;
+  if (game.gameId === "love-trivia") return game.winner !== null;
   return game.winner !== null;
 }
 
@@ -529,6 +797,22 @@ async function persistGameEnd(room: Room, game: ActiveGame, io: Server): Promise
           delta: 20,
           reason: "neon-stacker win",
         });
+      }
+    } else if (game.gameId === "love-trivia") {
+      if (game.winner === "done") {
+        // Cooperative — both players get points scaled to how many
+        // rounds they matched on. Max 10 matches = 20 points each.
+        outcome = "coop-win";
+        const pointsEach = Math.min(20, game.matchedCount * 2);
+        if (pointsEach > 0) {
+          for (const p of game.players) {
+            pointsAwards.push({
+              clientId: p.clientId,
+              delta: pointsEach,
+              reason: `love-trivia ${game.matchedCount}/10`,
+            });
+          }
+        }
       }
     }
 
@@ -911,6 +1195,21 @@ io.on("connection", (socket: Socket) => {
         lastDrop: null,
         startedAt: Date.now(),
       };
+    } else if (gameId === "love-trivia") {
+      game = {
+        gameId: "love-trivia",
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        questions: pickLoveTriviaQuestions(10),
+        currentIdx: 0,
+        currentAnswers: [null, null],
+        matchedCount: 0,
+        history: [],
+        winner: null,
+        startedAt: Date.now(),
+      };
     } else {
       return; // unknown game id
     }
@@ -926,7 +1225,7 @@ io.on("connection", (socket: Socket) => {
       cellIndex?: number;
       column?: number;
       letter?: string;
-      action?: "place" | "fire" | "drop" | "reportGameOver";
+      action?: "place" | "fire" | "drop" | "reportGameOver" | "answer";
       ships?: {
         name: string;
         len: number;
@@ -942,6 +1241,8 @@ io.on("connection", (socket: Socket) => {
       shape?: { width: number; height: number; name: string };
       // neon-stacker reportGameOver
       loserIdx?: 0 | 1;
+      // love-trivia answer
+      choice?: number;
     }) => {
       if (!joinedCode) return;
       const room = rooms.get(joinedCode);
@@ -1090,6 +1391,52 @@ io.on("connection", (socket: Socket) => {
           }
           changed = true;
         }
+      } else if (game.gameId === "love-trivia") {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+        if (game.winner !== null) return;
+
+        if (payload?.action === "answer") {
+          const choice = payload.choice;
+          if (
+            typeof choice !== "number" ||
+            choice < 0 ||
+            choice > 3
+          )
+            return;
+          // Ignore double-submits for the same round
+          if (game.currentAnswers[myIdx] !== null) return;
+          game.currentAnswers[myIdx] = choice;
+
+          // If both players answered, evaluate the round
+          if (
+            game.currentAnswers[0] !== null &&
+            game.currentAnswers[1] !== null
+          ) {
+            const a0 = game.currentAnswers[0];
+            const a1 = game.currentAnswers[1];
+            const matched = a0 === a1;
+            const question = game.questions[game.currentIdx];
+            game.history.push({
+              questionId: question.id,
+              answers: [a0, a1],
+              matched,
+            });
+            if (matched) game.matchedCount += 1;
+            game.currentIdx += 1;
+            game.currentAnswers = [null, null];
+            // End of game after 10 rounds
+            if (game.currentIdx >= game.questions.length) {
+              game.winner = "done";
+            }
+          }
+          changed = true;
+        }
       } else if (game.gameId === "neon-stacker") {
         const myIdx: 0 | 1 | null =
           game.players[0].clientId === me.clientId
@@ -1186,6 +1533,100 @@ io.on("connection", (socket: Socket) => {
     room.game = null;
     emitGameUpdate(room);
   });
+
+  // -- Room reset ----------------------------------------------------------
+  // Escape hatch for stuck rooms: an owner requests a full wipe. All peers
+  // in the room are ejected, Supabase tables scoped to the code are
+  // cleared, and the room is rebuilt empty. Requires the caller to be one
+  // of the current owners in memory — this is NOT cryptographic proof of
+  // identity but stops a random third party from wiping someone else's
+  // room just because they know the code.
+  //
+  // Also supports a "force" mode that only requires possession of the
+  // clientId the caller is using — useful when the server lost in-memory
+  // state but Supabase still owns the lock. The caller gets a single
+  // escape hatch they can invoke from their own device.
+  socket.on(
+    "room:reset",
+    async (
+      payload: { code?: string; clientId?: string; force?: boolean },
+      ack?: (res: unknown) => void,
+    ) => {
+      const rawCode = sanitizeRoomCode(payload?.code || "");
+      const clientId = (payload?.clientId || "").slice(0, 64);
+      const force = payload?.force === true;
+      if (!rawCode || !clientId) {
+        ack?.({ ok: false, error: "code and clientId required" });
+        return;
+      }
+
+      // Authorization check: caller must currently be an owner on this
+      // socket's in-memory room, OR the Supabase row must name them.
+      const memRoom = rooms.get(rawCode);
+      const memOwner = !!memRoom && memRoom.owners.includes(clientId);
+
+      let dbOwner = false;
+      if (USE_DB) {
+        try {
+          const { data, error } = await (
+            await import("./db")
+          )
+            .db()
+            .from("rooms")
+            .select("owner_client_ids")
+            .eq("code", rawCode)
+            .maybeSingle();
+          if (!error && data) {
+            const owners: string[] =
+              (data as { owner_client_ids: string[] })
+                .owner_client_ids || [];
+            dbOwner = owners.includes(clientId);
+          }
+        } catch (e) {
+          console.error("[swoono] room:reset owner check error:", e);
+        }
+      }
+
+      if (!memOwner && !dbOwner && !force) {
+        ack?.({
+          ok: false,
+          error:
+            "not an owner of this room. If you're stuck, pass force=true from " +
+            "the same clientId to bypass (dev escape hatch).",
+        });
+        return;
+      }
+
+      // Eject any connected peers
+      if (memRoom) {
+        for (const peer of memRoom.peers.values()) {
+          io.to(peer.socketId).emit("room:reset:forced", { code: rawCode });
+        }
+      }
+
+      // Wipe Supabase scoped to this room
+      if (USE_DB) {
+        try {
+          await dbWipeRoom(rawCode);
+        } catch (e) {
+          console.error("[swoono] room:reset DB wipe error:", e);
+          ack?.({ ok: false, error: "db wipe failed" });
+          return;
+        }
+      }
+
+      // Drop in-memory state
+      rooms.delete(rawCode);
+      joinedCode = null;
+      joinedClientId = null;
+
+      console.log(
+        `[swoono] room:reset code=${rawCode} by=${clientId} mem=${memOwner} db=${dbOwner} force=${force}`,
+      );
+
+      ack?.({ ok: true });
+    },
+  );
 
   // -- Reward effect relay -------------------------------------------------
   // A sends an effect (kiss, slap, fireworks) → server forwards to the

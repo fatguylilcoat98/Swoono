@@ -35,6 +35,7 @@ type RoomState = {
   join: (code: string, name: string) => Promise<boolean>;
   leave: () => void;
   sendNote: (text: string, color: string) => void;
+  resetRoom: (force?: boolean) => Promise<boolean>;
   startGame: (gameId: string) => void;
   makeMove: (cellIndex: number) => void;
   dropColumn: (column: number) => void;
@@ -55,6 +56,7 @@ type RoomState = {
     shape: { width: number; height: number; name: string },
   ) => void;
   reportNeonStackerGameOver: () => void;
+  submitLoveTriviaAnswer: (choice: number) => void;
   pushLocation: (lat: number, lng: number, accuracyM?: number) => void;
   exitGame: () => void;
 };
@@ -104,6 +106,21 @@ export const useRoomStore = create<RoomState>((set, get) => {
       set({ distanceMeters: meters, distanceUpdatedAt: updatedAt });
     },
   );
+
+  // The other peer hit "Reset Room" — we get ejected and dropped to
+  // the landing screen with a message.
+  socket.on("room:reset:forced", () => {
+    set({
+      code: null,
+      peers: [],
+      notes: [],
+      activeGame: null,
+      distanceMeters: null,
+      distanceUpdatedAt: null,
+      joinError: "The other person reset this room. Start fresh.",
+      peerPoints: {},
+    });
+  });
 
   // Listen for points sync from server
   socket.on("points:sync", ({ clientId, points }: { clientId: string; points: number }) => {
@@ -180,6 +197,36 @@ export const useRoomStore = create<RoomState>((set, get) => {
       });
     },
 
+    resetRoom: async (force = false) => {
+      const currentCode = get().code;
+      if (!currentCode) return false;
+      return new Promise<boolean>((resolve) => {
+        socket.emit(
+          "room:reset",
+          { code: currentCode, clientId: CLIENT_ID, force },
+          (res: { ok: boolean; error?: string }) => {
+            if (res?.ok) {
+              // Drop everything locally — it's gone server-side now.
+              set({
+                code: null,
+                peers: [],
+                notes: [],
+                activeGame: null,
+                distanceMeters: null,
+                distanceUpdatedAt: null,
+                joinError: null,
+                peerPoints: {},
+              });
+              resolve(true);
+            } else {
+              set({ joinError: res?.error || "Could not reset room" });
+              resolve(false);
+            }
+          },
+        );
+      });
+    },
+
     sendNote: (text, color) => {
       socket.emit("note:create", { text, color });
     },
@@ -221,6 +268,10 @@ export const useRoomStore = create<RoomState>((set, get) => {
 
     reportNeonStackerGameOver: () => {
       socket.emit("game:move", { action: "reportGameOver" });
+    },
+
+    submitLoveTriviaAnswer: (choice) => {
+      socket.emit("game:move", { action: "answer", choice });
     },
 
     pushLocation: (lat, lng, accuracyM) => {

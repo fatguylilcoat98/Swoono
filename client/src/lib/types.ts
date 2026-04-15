@@ -140,6 +140,39 @@ export type BattleshipState = {
   startedAt: number;
 };
 
+// --- Love Trivia (cooperative couples game) ---
+
+export type LoveTriviaQuestion = {
+  id: string;
+  text: string;
+  choices: string[]; // always length 4
+};
+
+export type LoveTriviaRoundResult = {
+  questionId: string;
+  answers: [number, number]; // choice index per player
+  matched: boolean;
+};
+
+export type LoveTriviaState = {
+  gameId: "love-trivia";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  /** 10 questions selected at game start */
+  questions: LoveTriviaQuestion[];
+  currentIdx: number;
+  /** Current round's submitted answers; null until player submits */
+  currentAnswers: [number | null, number | null];
+  /** Number of matched rounds so far */
+  matchedCount: number;
+  history: LoveTriviaRoundResult[];
+  /** "done" when all 10 rounds played */
+  winner: "done" | null;
+  startedAt: number;
+};
+
 // --- Neon Stacker (physics tower) ---
 // Server tracks whose turn, how many drops per player, level progression.
 // The matter.js physics runs client-side — sync happens via deterministic
@@ -197,7 +230,8 @@ export type ActiveGame =
   | ConnectFourState
   | HangmanState
   | BattleshipState
-  | NeonStackerState;
+  | NeonStackerState
+  | LoveTriviaState;
 
 // --- Production utility types ---------------------------------------------
 

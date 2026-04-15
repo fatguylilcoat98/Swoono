@@ -191,6 +191,26 @@ export async function touchRoom(code: string): Promise<void> {
     .eq("code", code);
 }
 
+/**
+ * Wipe a room completely — deletes the rooms row (which cascades to
+ * room_peers, notes, points_events, game_records, reward_events,
+ * peer_locations via ON DELETE CASCADE). Used by the "Reset Room"
+ * action when an owner wants a clean slate.
+ */
+export async function wipeRoom(code: string): Promise<void> {
+  const c = db();
+  // The rooms table has ON DELETE CASCADE on every dependent table, so
+  // one delete is enough. We still explicitly clean the dependent
+  // tables first in case a future schema removes the cascade.
+  await c.from("peer_locations").delete().eq("room_code", code);
+  await c.from("reward_events").delete().eq("room_code", code);
+  await c.from("game_records").delete().eq("room_code", code);
+  await c.from("points_events").delete().eq("room_code", code);
+  await c.from("notes").delete().eq("room_code", code);
+  await c.from("room_peers").delete().eq("room_code", code);
+  await c.from("rooms").delete().eq("code", code);
+}
+
 // --- Notes ----------------------------------------------------------------
 
 export async function listNotes(
