@@ -683,7 +683,7 @@ io.on("connection", (socket: Socket) => {
           roomCode: n.room_code,
           authorClientId: n.author_client_id,
           authorName: n.author_name,
-          text: n.body,
+          text: n.text,
           color: n.color,
           createdAt: new Date(n.created_at).getTime(),
         }));
@@ -777,7 +777,7 @@ io.on("connection", (socket: Socket) => {
           room_code: room.code,
           author_client_id: me.clientId,
           author_name: me.name,
-          body: text,
+          text,
           color,
         });
         note = {
@@ -785,7 +785,7 @@ io.on("connection", (socket: Socket) => {
           roomCode: row.room_code,
           authorClientId: row.author_client_id,
           authorName: row.author_name,
-          text: row.body,
+          text: row.text,
           color: row.color,
           createdAt: new Date(row.created_at).getTime(),
         };

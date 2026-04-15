@@ -50,10 +50,9 @@ export type NoteRow = {
   room_code: string;
   author_client_id: string;
   author_name: string;
-  /** Column is named `body` in the DB. The Note type on the client/wire
-   *  still exposes it as `text` for UI compatibility; translation happens
-   *  in index.ts when mapping rows to Notes. */
-  body: string;
+  /** Column is named `text` in the live DB — matches the working schema
+   *  that's already been applied to the Supabase project. */
+  text: string;
   color: string;
   created_at: string;
 };

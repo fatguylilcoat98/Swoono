@@ -54,7 +54,7 @@ create table if not exists notes (
   room_code text not null references rooms(code) on delete cascade,
   author_client_id text not null,
   author_name text not null,
-  body text not null,
+  text text not null,
   color text not null,
   created_at timestamptz not null default now()
 );
