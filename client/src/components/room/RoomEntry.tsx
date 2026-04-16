@@ -2,6 +2,7 @@ import { useState, FormEvent } from "react";
 import { motion } from "framer-motion";
 import GlassPanel from "../ui/GlassPanel";
 import { useRoomStore } from "../../state/roomStore";
+import AuthPanel from "../auth/AuthPanel";
 
 type RoomEntryProps = {
   onJoined: () => void;
@@ -64,6 +65,8 @@ export default function RoomEntry({ onJoined, onBack }: RoomEntryProps) {
             Back
           </button>
         </div>
+
+        <AuthPanel />
 
         <form onSubmit={submit} className="space-y-5">
           <div>
