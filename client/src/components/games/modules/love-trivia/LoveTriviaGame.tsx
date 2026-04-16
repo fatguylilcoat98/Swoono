@@ -1,8 +1,61 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRoomStore } from "../../../../state/roomStore";
 import { triggerEffect } from "../../../../lib/registries/effectRegistry";
 import type { GameContextProps } from "../../../../lib/registries/gameRegistry";
 import type { LoveTriviaState } from "../../../../lib/types";
+
+// Neon visual wrapper — Couples Trivia is a "special area" (Chris's
+// spec). Animated gradient + scanlines + glowing frame so this game
+// pops visually vs the rest of the game panel.
+function NeonFrame({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="flex-1 flex flex-col relative rounded-xl overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(ellipse at 20% 10%, rgba(255,77,143,0.22), transparent 55%), " +
+          "radial-gradient(ellipse at 80% 90%, rgba(0,200,255,0.18), transparent 55%), " +
+          "linear-gradient(135deg, #1a0a2e 0%, #0d0420 50%, #1a0a2e 100%)",
+        boxShadow:
+          "inset 0 0 60px rgba(255,77,143,0.2), " +
+          "inset 0 0 120px rgba(0,180,255,0.08), " +
+          "0 0 40px rgba(255,77,143,0.25)",
+        border: "1px solid rgba(255,77,143,0.35)",
+      }}
+    >
+      {/* Scanlines overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 3px)",
+          mixBlendMode: "overlay",
+        }}
+      />
+      {/* Corner accent — pulsing heart */}
+      <div
+        className="absolute top-3 right-3 text-2xl pointer-events-none select-none"
+        style={{
+          filter: "drop-shadow(0 0 8px rgba(255,77,143,0.9))",
+          animation: "neonPulse 1.8s ease-in-out infinite",
+        }}
+      >
+        💞
+      </div>
+      <style>{`
+        @keyframes neonPulse {
+          0%, 100% { transform: scale(1); opacity: 0.9; }
+          50% { transform: scale(1.2); opacity: 1; }
+        }
+        @keyframes neonFlicker {
+          0%, 100% { text-shadow: 0 0 8px #ff4d8f, 0 0 20px #ff4d8f, 0 0 40px #ff4d8f; }
+          50% { text-shadow: 0 0 12px #ff4d8f, 0 0 28px #ff4d8f, 0 0 56px #ff4d8f; }
+        }
+      `}</style>
+      <div className="relative flex-1 flex flex-col p-4">{children}</div>
+    </div>
+  );
+}
 
 // Couples Trivia — Newlywed-style two-phase game.
 //
@@ -105,7 +158,7 @@ export default function LoveTriviaGame({
     const q = game.questions[currentQIdx];
 
     return (
-      <div className="flex-1 flex flex-col">
+      <NeonFrame>
         <Header
           title="Couples Trivia"
           subtitle={`Setup · Question ${Math.min(
@@ -162,7 +215,7 @@ export default function LoveTriviaGame({
             </p>
           </div>
         ) : null}
-      </div>
+      </NeonFrame>
     );
   }
 
@@ -181,7 +234,7 @@ export default function LoveTriviaGame({
             ? "Some wins, lots to discover."
             : "Plenty to learn about each other.";
     return (
-      <div className="flex-1 flex flex-col">
+      <NeonFrame>
         <Header
           title="Couples Trivia"
           subtitle="Final"
@@ -216,7 +269,7 @@ export default function LoveTriviaGame({
             Back to games
           </button>
         </div>
-      </div>
+      </NeonFrame>
     );
   }
 
@@ -242,7 +295,7 @@ export default function LoveTriviaGame({
   // In reveal mode, show both answers + whether partner predicted
   // correctly. Otherwise show the question for the current player.
   return (
-    <div className="flex-1 flex flex-col">
+    <NeonFrame>
       <Header
         title="Couples Trivia"
         subtitle={`Round ${idx + 1} of ${game.questions.length}`}
@@ -332,7 +385,7 @@ export default function LoveTriviaGame({
           </p>
         </div>
       )}
-    </div>
+    </NeonFrame>
   );
 }
 
@@ -350,15 +403,27 @@ function Header({
   return (
     <div className="flex items-center justify-between mb-4">
       <div>
-        <h2 className="font-display text-2xl text-swoono-ink">{title}</h2>
-        <p className="text-swoono-dim text-xs uppercase tracking-widest mt-1">
+        <h2
+          className="font-display text-2xl"
+          style={{
+            color: "#ff4d8f",
+            animation: "neonFlicker 3s ease-in-out infinite",
+          }}
+        >
+          {title}
+        </h2>
+        <p
+          className="text-xs uppercase tracking-widest mt-1"
+          style={{ color: "#9fa0c9" }}
+        >
           {subtitle} · with{" "}
-          <span className="text-swoono-ink">{opponentName}</span>
+          <span style={{ color: "#00d4ff" }}>{opponentName}</span>
         </p>
       </div>
       <button
         onClick={onExit}
-        className="text-swoono-dim text-xs uppercase tracking-widest hover:text-swoono-accent transition-colors"
+        className="text-xs uppercase tracking-widest transition-colors"
+        style={{ color: "#9fa0c9" }}
       >
         Exit
       </button>

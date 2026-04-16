@@ -402,6 +402,32 @@ export default function NeonStackerGame({
     applyDrop(state, drop, audioRef.current);
   }, [game?.lastDrop?.index]);
 
+  // Spawn a fresh block for the next player's turn.
+  //
+  // Runs on a ticker (not just game.nextPlayerIdx change) because the
+  // block-landed + stability transition happens inside the physics
+  // loop — React doesn't know when it finishes. We poll: when state
+  // has no currentBlock AND is not dropping/waiting AND the game is
+  // still in progress, spawn a fresh block for whoever's turn it is.
+  //
+  // Without this, the receiving player had nothing to drop after the
+  // opponent's block landed — the crane would be empty and the Drop
+  // button would do nothing. Chris's "back-and-forth doesn't work" bug.
+  useEffect(() => {
+    if (!game || game.winnerIdx !== null) return;
+    const interval = window.setInterval(() => {
+      const state = engineStateRef.current;
+      if (!state) return;
+      if (state.currentBlock) return;
+      if (state.isDropping) return;
+      if (state.waitingForStable) return;
+      // Safe to spawn the next block.
+      spawnBlock(state, nextShape(), game.nextPlayerIdx);
+    }, 120);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.nextPlayerIdx, game?.winnerIdx, game?.startedAt]);
+
   // Level-up detection (cosmetic — authoritative state is on server)
   useEffect(() => {
     if (!game) return;

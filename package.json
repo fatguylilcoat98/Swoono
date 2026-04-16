@@ -11,7 +11,8 @@
     "dev:client": "npm run dev -w client",
     "dev:server": "npm run dev -w server",
     "build": "npm run build -w client && npm run build -w server",
-    "start": "npm start -w server"
+    "start": "npm start -w server",
+    "test:games": "node scripts/test-games.mjs"
   },
   "engines": {
     "node": ">=20"

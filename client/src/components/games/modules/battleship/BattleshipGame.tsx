@@ -273,7 +273,7 @@ function mkParticle(type: ParticleType, x: number, y: number): Particle {
     p.vx = (Math.random() - 0.5) * 2;
     p.vy = (Math.random() - 0.5) * 2;
     p.vz = -Math.random() * 3 - 2;
-    p.size = Math.random() * 25 + 20;
+    p.size = Math.random() * 12 + 8;
   } else if (type === "ember") {
     const a = Math.random() * Math.PI * 2;
     const s = Math.random() * 8 + 4;
@@ -305,8 +305,8 @@ function updateParticle(p: Particle) {
     p.vz += 0.2;
     p.vx *= 0.98;
     p.vy *= 0.98;
-    p.life -= 0.008;
-    p.size += 0.8;
+    p.life -= 0.015;
+    p.size += 0.3;
   } else if (p.type === "ember") {
     p.trail.push({ x: p.x, y: p.y, z: p.z });
     if (p.trail.length > 8) p.trail.shift();
@@ -844,7 +844,7 @@ export default function BattleshipGame({
             ctx.fill();
 
             // Persistent gentle smoke particles rising off the segment
-            if (Math.random() < 0.05) {
+            if (Math.random() < 0.015) {
               anim.particles.push(mkParticle(
                 "smoke",
                 scx + (Math.random() - 0.5) * cellSize * 0.4,
@@ -855,19 +855,19 @@ export default function BattleshipGame({
           }
         });
 
-        // Layer 3: misses (water ripples) — unchanged from before,
-        // drawn after the ships so ripples overlay cleanly
+        // Layer 3: misses (water ripples) — smaller so they don't
+        // compete visually with hits
         game.myShotsFired.forEach((shot) => {
           if (shot.hit) return;
           const scx = shot.x * cellSize + cellSize / 2;
           const scy = shot.y * cellSize + cellSize / 2;
           const ripple = Math.sin(anim.time * 3) * 0.2 + 0.8;
-          ctx.strokeStyle = `rgba(100,200,255,${0.5 * ripple})`;
-          ctx.lineWidth = 3;
-          ctx.shadowBlur = 10;
-          ctx.shadowColor = "rgba(100,200,255,0.6)";
-          for (let r = 1; r <= 3; r++) {
-            const rad = 8 * r * ripple;
+          ctx.strokeStyle = `rgba(100,200,255,${0.45 * ripple})`;
+          ctx.lineWidth = 1.5;
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = "rgba(100,200,255,0.5)";
+          for (let r = 1; r <= 2; r++) {
+            const rad = 4 * r * ripple;
             if (rad > 0) {
               ctx.beginPath();
               ctx.arc(scx, scy, rad, 0, Math.PI * 2);
