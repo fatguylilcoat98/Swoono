@@ -4,9 +4,13 @@ import { triggerEffect } from "../../../../lib/registries/effectRegistry";
 import type { GameContextProps } from "../../../../lib/registries/gameRegistry";
 import type { LoveTriviaState } from "../../../../lib/types";
 
-// Cooperative couples game: both players pick what they think their
-// partner would answer. Matching answers score together. 10 rounds.
-// The server owns all state — this component is pure render + input.
+// Couples Trivia — Newlywed-style two-phase game.
+//
+//   Setup: each player predicts what their partner will answer on all
+//          10 questions, in parallel (no turn-taking). Fast-fill view.
+//   Game:  both players answer for themselves one question at a time.
+//          After both answer, reveal partner's prediction vs actual.
+//   Done:  final scores — how well each of you knows the other.
 
 export default function LoveTriviaGame({
   selfClientId,
@@ -17,8 +21,12 @@ export default function LoveTriviaGame({
   const game: LoveTriviaState | null =
     activeGame && activeGame.gameId === "love-trivia" ? activeGame : null;
   const submitAnswer = useRoomStore((s) => s.submitLoveTriviaAnswer);
+  const submitPrediction = useRoomStore(
+    (s) => s.submitLoveTriviaSetupPrediction,
+  );
 
   const [awarded, setAwarded] = useState(false);
+  const [revealHoldIdx, setRevealHoldIdx] = useState<number | null>(null);
 
   const myIdx: 0 | 1 | null = game
     ? game.players[0].clientId === selfClientId
@@ -27,50 +35,39 @@ export default function LoveTriviaGame({
         ? 1
         : null
     : null;
-
-  const myAnswer =
-    game && myIdx !== null ? game.currentAnswers[myIdx] : null;
   const partnerIdx = myIdx === 0 ? 1 : 0;
-  const partnerAnswered =
-    game && myIdx !== null ? game.currentAnswers[partnerIdx] !== null : false;
 
-  // Show the previous round's result for ~1.5s after it resolves
-  const [showLastResult, setShowLastResult] = useState<{
-    matched: boolean;
-    myChoice: number;
-    partnerChoice: number;
-  } | null>(null);
-
+  // When a new round's answers both land, hold the reveal for ~2.5s
+  // before letting the component advance to the next question.
   useEffect(() => {
     if (!game || myIdx === null) return;
-    const lastRound = game.history[game.history.length - 1];
-    if (!lastRound) {
-      setShowLastResult(null);
-      return;
+    if (game.phase !== "game") return;
+    const completedIdx = game.currentIdx - 1;
+    if (completedIdx < 0) return;
+    const myA = game.gameAnswers[myIdx][completedIdx];
+    const theirA = game.gameAnswers[partnerIdx][completedIdx];
+    if (myA !== null && theirA !== null) {
+      setRevealHoldIdx(completedIdx);
+      const t = window.setTimeout(() => setRevealHoldIdx(null), 2500);
+      return () => window.clearTimeout(t);
     }
-    // Only briefly flash the result after it lands
-    setShowLastResult({
-      matched: lastRound.matched,
-      myChoice: lastRound.answers[myIdx],
-      partnerChoice: lastRound.answers[partnerIdx],
-    });
-    const t = window.setTimeout(() => setShowLastResult(null), 1800);
-    return () => window.clearTimeout(t);
-  }, [game?.history.length, myIdx, partnerIdx]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.currentIdx, game?.phase]);
 
-  // Fire win/lose effect + points once on completion
+  // Fire win/lose effects + points on completion
   useEffect(() => {
     if (!game || game.winner !== "done" || awarded || myIdx === null) return;
     setAwarded(true);
-    const pts = Math.min(20, game.matchedCount * 2);
-    if (game.matchedCount >= 6) {
-      onAwardPoints(pts, `Love Trivia ${game.matchedCount}/10`);
+    const myScore = game.scores[myIdx];
+    const pts = Math.min(20, myScore * 2);
+    if (myScore >= 6) {
+      onAwardPoints(pts, `Couples Trivia ${myScore}/10`);
       triggerEffect({
         effectId: "effect.game.win",
         fromClientId: selfClientId,
       });
-    } else if (game.matchedCount >= 3) {
-      onAwardPoints(pts, `Love Trivia ${game.matchedCount}/10`);
+    } else if (myScore >= 3) {
+      onAwardPoints(pts, `Couples Trivia ${myScore}/10`);
     } else {
       triggerEffect({
         effectId: "effect.game.lose",
@@ -89,59 +86,129 @@ export default function LoveTriviaGame({
   }
 
   const opponent = game.players[partnerIdx];
-  const question = game.questions[game.currentIdx] || null;
-  const done = game.winner === "done";
+  const opponentName = opponent?.name ?? "partner";
 
-  return (
-    <div className="flex-1 flex flex-col">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="font-display text-2xl text-swoono-ink">Love Trivia</h2>
-          <p className="text-swoono-dim text-xs uppercase tracking-widest mt-1">
-            {done
-              ? game.matchedCount >= 6
-                ? "You two are in sync"
-                : game.matchedCount >= 3
-                  ? "Close — keep learning each other"
-                  : "Lots to discover"
-              : `Round ${game.currentIdx + 1} of ${game.questions.length}`}
-            {" · vs "}
-            <span className="text-swoono-ink">{opponent?.name}</span>
-          </p>
-        </div>
-        <button
-          onClick={onExit}
-          className="text-swoono-dim text-xs uppercase tracking-widest hover:text-swoono-accent transition-colors"
-        >
-          Exit
-        </button>
-      </div>
+  // ──────────────────────────────────────────────────────────────
+  // Phase: SETUP
+  // ──────────────────────────────────────────────────────────────
+  if (game.phase === "setup") {
+    const myPreds = myIdx !== null ? game.setupPredictions[myIdx] : [];
+    const mineDone = myPreds.every((v) => v !== null);
+    const partnerPreds =
+      myIdx !== null ? game.setupPredictions[partnerIdx] : [];
+    const partnerDone = partnerPreds.every((v) => v !== null);
 
-      <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-swoono-dim mb-4">
-        <span>
-          Matches{" "}
-          <span className="text-swoono-accent">
-            {game.matchedCount} / {game.history.length || game.currentIdx}
-          </span>
-        </span>
-        <span>
-          Final goal{" "}
-          <span className="text-swoono-accent">
-            {game.questions.length}
-          </span>
-        </span>
-      </div>
+    // Pick the first unanswered question for me. If all answered, show
+    // the waiting screen until the partner is done too.
+    const nextIdx = myPreds.findIndex((v) => v === null);
+    const currentQIdx = nextIdx >= 0 ? nextIdx : myPreds.length - 1;
+    const q = game.questions[currentQIdx];
 
-      {done ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-center gap-4">
-          <div className="text-5xl font-display text-swoono-accent">
-            {game.matchedCount} / {game.questions.length}
+    return (
+      <div className="flex-1 flex flex-col">
+        <Header
+          title="Couples Trivia"
+          subtitle={`Setup · Question ${Math.min(
+            currentQIdx + 1,
+            game.questions.length,
+          )} of ${game.questions.length}`}
+          opponentName={opponentName}
+          onExit={onExit}
+        />
+
+        <p className="text-center text-xs uppercase tracking-widest text-swoono-dim mb-2">
+          How well do you know {opponentName}?
+        </p>
+        <p className="text-center text-[11px] text-swoono-dim mb-6">
+          Predict what {opponentName} will answer. Both of you answer
+          all 10 questions, then the real game starts.
+        </p>
+
+        {mineDone ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
+            <div className="text-4xl">✓</div>
+            <p className="text-swoono-ink">Your predictions are in.</p>
+            <p className="text-swoono-dim text-sm">
+              {partnerDone
+                ? "Starting the real round…"
+                : `Waiting on ${opponentName}…`}
+            </p>
           </div>
-          <p className="text-swoono-ink">
-            You agreed on {game.matchedCount} out of {game.questions.length} —{" "}
-            {Math.round((game.matchedCount / game.questions.length) * 100)}% in
-            sync.
-          </p>
+        ) : q ? (
+          <div className="flex-1 flex flex-col">
+            <p className="text-swoono-dim text-[10px] uppercase tracking-widest text-center mb-3">
+              What would {opponentName} answer?
+            </p>
+            <p className="text-xl text-swoono-ink text-center leading-snug mb-6 px-4">
+              {q.text}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              {q.choices.map((choice, idx) => (
+                <button
+                  key={idx}
+                  onClick={() =>
+                    myIdx !== null && submitPrediction(currentQIdx, idx)
+                  }
+                  className="px-4 py-4 rounded-lg border bg-white/5 border-white/10 text-sm text-left text-swoono-ink hover:bg-white/10 hover:border-swoono-accent/40 transition-colors"
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-[10px] uppercase tracking-widest text-swoono-dim text-center">
+              {myPreds.filter((v) => v !== null).length} / 10 submitted
+            </p>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Phase: DONE
+  // ──────────────────────────────────────────────────────────────
+  if (game.phase === "done" && myIdx !== null) {
+    const myScore = game.scores[myIdx];
+    const theirScore = game.scores[partnerIdx];
+    const summary =
+      myScore >= 8
+        ? "You two are locked in."
+        : myScore >= 5
+          ? "Pretty in sync. Keep learning each other."
+          : myScore >= 3
+            ? "Some wins, lots to discover."
+            : "Plenty to learn about each other.";
+    return (
+      <div className="flex-1 flex flex-col">
+        <Header
+          title="Couples Trivia"
+          subtitle="Final"
+          opponentName={opponentName}
+          onExit={onExit}
+        />
+        <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 px-4">
+          <div className="text-5xl">💞</div>
+          <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
+            <div className="bg-swoono-accent/10 border border-swoono-accent/30 rounded-xl p-4">
+              <p className="text-[10px] uppercase tracking-widest text-swoono-dim">
+                You know {opponentName}
+              </p>
+              <p className="text-3xl font-display text-swoono-accent mt-1">
+                {myScore} / 10
+              </p>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+              <p className="text-[10px] uppercase tracking-widest text-swoono-dim">
+                {opponentName} knows you
+              </p>
+              <p className="text-3xl font-display text-swoono-ink mt-1">
+                {theirScore} / 10
+              </p>
+            </div>
+          </div>
+          <p className="text-swoono-ink mt-3">{summary}</p>
           <button
             onClick={onExit}
             className="mt-6 px-6 py-3 bg-swoono-accent text-black uppercase tracking-widest text-xs font-semibold rounded"
@@ -149,25 +216,98 @@ export default function LoveTriviaGame({
             Back to games
           </button>
         </div>
-      ) : question ? (
+      </div>
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Phase: GAME
+  // ──────────────────────────────────────────────────────────────
+  const idx =
+    revealHoldIdx !== null ? revealHoldIdx : game.currentIdx;
+  const q = game.questions[idx];
+  if (!q || myIdx === null) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-swoono-dim">
+        Loading…
+      </div>
+    );
+  }
+
+  const myAnswer = game.gameAnswers[myIdx][idx];
+  const partnerAnswer = game.gameAnswers[partnerIdx][idx];
+  const bothAnswered = myAnswer !== null && partnerAnswer !== null;
+  const showingReveal = revealHoldIdx !== null;
+
+  // In reveal mode, show both answers + whether partner predicted
+  // correctly. Otherwise show the question for the current player.
+  return (
+    <div className="flex-1 flex flex-col">
+      <Header
+        title="Couples Trivia"
+        subtitle={`Round ${idx + 1} of ${game.questions.length}`}
+        opponentName={opponentName}
+        onExit={onExit}
+      />
+
+      <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-swoono-dim mb-4">
+        <span>
+          You know {opponentName}:{" "}
+          <span className="text-swoono-accent">{game.scores[myIdx]}</span>
+        </span>
+        <span>
+          {opponentName} knows you:{" "}
+          <span className="text-swoono-accent">
+            {game.scores[partnerIdx]}
+          </span>
+        </span>
+      </div>
+
+      {showingReveal && bothAnswered ? (
+        <div className="flex-1 flex flex-col gap-4 px-2">
+          <p className="text-center text-xs uppercase tracking-widest text-swoono-dim">
+            Reveal
+          </p>
+          <p className="text-lg text-swoono-ink text-center leading-snug mb-2">
+            {q.text}
+          </p>
+
+          <RevealRow
+            label={`You said`}
+            chosen={q.choices[myAnswer as number]}
+            partnerPrediction={q.choices[game.setupPredictions[partnerIdx][idx] ?? 0]}
+            matched={
+              game.setupPredictions[partnerIdx][idx] === myAnswer
+            }
+            predicterName={opponentName}
+          />
+          <RevealRow
+            label={`${opponentName} said`}
+            chosen={q.choices[partnerAnswer as number]}
+            partnerPrediction={q.choices[game.setupPredictions[myIdx][idx] ?? 0]}
+            matched={
+              game.setupPredictions[myIdx][idx] === partnerAnswer
+            }
+            predicterName="You"
+          />
+        </div>
+      ) : (
         <div className="flex-1 flex flex-col">
-          <div className="mb-6 text-center">
-            <p className="text-swoono-dim text-xs uppercase tracking-widest mb-2">
-              Pick what your partner would choose
-            </p>
-            <p className="text-swoono-ink text-xl leading-snug">
-              {question.text}
-            </p>
-          </div>
+          <p className="text-center text-[11px] uppercase tracking-widest text-swoono-dim mb-3">
+            This is about YOU — answer honestly
+          </p>
+          <p className="text-xl text-swoono-ink text-center leading-snug mb-6 px-4">
+            {q.text}
+          </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-            {question.choices.map((choice, idx) => {
-              const isMine = myAnswer === idx;
+            {q.choices.map((choice, i) => {
+              const isMine = myAnswer === i;
               const disabled = myAnswer !== null;
               return (
                 <button
-                  key={idx}
-                  onClick={() => !disabled && submitAnswer(idx)}
+                  key={i}
+                  onClick={() => !disabled && submitAnswer(i)}
                   disabled={disabled}
                   className={`px-4 py-4 rounded-lg border text-sm text-left transition-colors ${
                     isMine
@@ -183,28 +323,83 @@ export default function LoveTriviaGame({
             })}
           </div>
 
-          <div className="text-center text-[11px] uppercase tracking-widest text-swoono-dim min-h-[20px]">
+          <p className="text-center text-[11px] uppercase tracking-widest text-swoono-dim">
             {myAnswer === null
               ? "Tap your answer"
-              : partnerAnswered
+              : partnerAnswer !== null
                 ? "Revealing…"
-                : `Waiting on ${opponent?.name ?? "partner"}…`}
-          </div>
-
-          {showLastResult && (
-            <div
-              className="mt-4 text-center text-sm font-semibold"
-              style={{
-                color: showLastResult.matched ? "#39FF14" : "#FF0055",
-              }}
-            >
-              {showLastResult.matched
-                ? "✓ You two matched!"
-                : "✗ Different answers that round"}
-            </div>
-          )}
+                : `Waiting on ${opponentName}…`}
+          </p>
         </div>
-      ) : null}
+      )}
+    </div>
+  );
+}
+
+function Header({
+  title,
+  subtitle,
+  opponentName,
+  onExit,
+}: {
+  title: string;
+  subtitle: string;
+  opponentName: string;
+  onExit: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-4">
+      <div>
+        <h2 className="font-display text-2xl text-swoono-ink">{title}</h2>
+        <p className="text-swoono-dim text-xs uppercase tracking-widest mt-1">
+          {subtitle} · with{" "}
+          <span className="text-swoono-ink">{opponentName}</span>
+        </p>
+      </div>
+      <button
+        onClick={onExit}
+        className="text-swoono-dim text-xs uppercase tracking-widest hover:text-swoono-accent transition-colors"
+      >
+        Exit
+      </button>
+    </div>
+  );
+}
+
+function RevealRow({
+  label,
+  chosen,
+  partnerPrediction,
+  matched,
+  predicterName,
+}: {
+  label: string;
+  chosen: string;
+  partnerPrediction: string;
+  matched: boolean;
+  predicterName: string;
+}) {
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        matched
+          ? "bg-swoono-accent/10 border-swoono-accent/40"
+          : "bg-white/5 border-white/10"
+      }`}
+    >
+      <p className="text-[10px] uppercase tracking-widest text-swoono-dim mb-1">
+        {label}
+      </p>
+      <p className="text-swoono-ink">{chosen}</p>
+      <p className="text-[11px] text-swoono-dim mt-2">
+        {predicterName} predicted:{" "}
+        <span className={matched ? "text-swoono-accent" : "text-swoono-ink"}>
+          {partnerPrediction}
+        </span>{" "}
+        <span className={matched ? "text-swoono-accent" : "text-red-400"}>
+          {matched ? "✓ nailed it" : "✗ miss"}
+        </span>
+      </p>
     </div>
   );
 }

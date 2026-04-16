@@ -251,27 +251,39 @@ export type LoveTriviaQuestion = {
   choices: string[]; // always length 4
 };
 
-export type LoveTriviaRoundResult = {
-  questionId: string;
-  answers: [number, number]; // choice index per player
-  matched: boolean;
-};
-
+/**
+ * Newlywed-style two-phase game.
+ *
+ * Phase 1 — SETUP: each player is shown the same 10 questions and
+ * predicts how THEIR PARTNER will answer. Submissions are parallel
+ * (no turn-taking).
+ *
+ * Phase 2 — GAME: each player answers the same 10 questions ABOUT
+ * THEMSELVES. Once both have submitted for a round, the round
+ * reveals: partner's prediction vs actual, with a match/miss flag.
+ *
+ * SCORE: a player scores a point each time THEIR prediction about
+ * their partner (from setup) matches the partner's actual answer
+ * (from game). So `scores[0]` is how well player 0 knows player 1.
+ */
 export type LoveTriviaState = {
   gameId: "love-trivia";
   players: [
     { clientId: string; name: string },
     { clientId: string; name: string },
   ];
+  phase: "setup" | "game" | "done";
   /** 10 questions selected at game start */
   questions: LoveTriviaQuestion[];
+  /** Setup predictions per player — length 10 each, null for unanswered */
+  setupPredictions: [(number | null)[], (number | null)[]];
+  /** Each player's actual answers about themselves (game phase) */
+  gameAnswers: [(number | null)[], (number | null)[]];
+  /** Index into questions for the current game-phase round */
   currentIdx: number;
-  /** Current round's submitted answers; null until player submits */
-  currentAnswers: [number | null, number | null];
-  /** Number of matched rounds so far */
-  matchedCount: number;
-  history: LoveTriviaRoundResult[];
-  /** "done" when all 10 rounds played */
+  /** Running scores (player N knowing partner) */
+  scores: [number, number];
+  /** "done" when all 10 rounds of the game phase have been revealed */
   winner: "done" | null;
   startedAt: number;
 };

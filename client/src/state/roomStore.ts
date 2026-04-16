@@ -60,6 +60,7 @@ type RoomState = {
   ) => void;
   reportNeonStackerGameOver: () => void;
   submitLoveTriviaAnswer: (choice: number) => void;
+  submitLoveTriviaSetupPrediction: (qIdx: number, choice: number) => void;
   pickPrompt: (promptType: "truth" | "dare") => void;
   completePrompt: () => void;
   skipPrompt: () => void;
@@ -290,6 +291,10 @@ export const useRoomStore = create<RoomState>((set, get) => {
 
     submitLoveTriviaAnswer: (choice) => {
       socket.emit("game:move", { action: "answer", choice });
+    },
+
+    submitLoveTriviaSetupPrediction: (qIdx, choice) => {
+      socket.emit("game:move", { action: "setupPredict", qIdx, choice });
     },
 
     pickPrompt: (promptType: "truth" | "dare") => {

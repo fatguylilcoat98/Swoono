@@ -153,70 +153,74 @@ type PromptGameState = {
   startedAt: number;
 };
 
+// All prompts designed to work REMOTELY — partners on phones possibly
+// far apart. No "rub their foot" or "let them pick your outfit"
+// prompts. Everything here works through the app + phone + camera.
+
 const TOD_TRUTHS: string[] = [
   "What's the most embarrassing song on your playlist right now?",
-  "What's one thing you've never told your partner but want to?",
+  "What's one thing you've never told me but want to?",
   "What's your most irrational fear?",
-  "What's the worst lie you've ever told?",
-  "If you had to re-live one day of your life, which one?",
+  "What's a lie you've told me, even small, that you feel weird about?",
+  "What day of your life would you re-live if you could?",
   "What's your guilty pleasure TV show?",
-  "What's something you did as a teenager that you'd be horrified to admit now?",
-  "Who was your first crush?",
+  "What's something you did as a teenager you'd be horrified to admit now?",
+  "Who was your very first crush and what were they like?",
   "What's the most childish thing you still do?",
-  "What would you do if you could be invisible for a day?",
-  "What's one habit of your partner's that drives you secretly crazy?",
+  "What would you do with a day of being invisible?",
+  "What's one habit of mine that secretly drives you crazy?",
   "When was the last time you cried and why?",
   "What's the worst gift you've ever received?",
-  "What's a belief you used to hold that you've changed your mind about?",
-  "If you had to pick one superpower, what would it be and why?",
-  "What's your most toxic trait you're actually working on?",
-  "What's the pettiest thing you've ever done in an argument?",
+  "What belief did you used to hold that you've changed your mind about?",
+  "If you had to pick one superpower, what and why?",
+  "What's a toxic trait of yours you're actually working on?",
+  "What's the pettiest thing you've ever done in an argument with me?",
   "What celebrity crush are you too embarrassed to admit?",
-  "What's one thing you googled this week that you'd never say out loud?",
-  "What's the weirdest thing you've ever eaten on a dare?",
-  "What was your most awkward first-date moment?",
-  "What's the dumbest thing you've spent money on?",
-  "What's a compliment you hate getting?",
-  "If you had 24 hours to do anything with no consequences, what?",
-  "What's your partner's most attractive non-physical trait?",
+  "What's the last thing you googled that you'd never say out loud?",
+  "What was the most awkward moment of our first date / first time meeting?",
+  "What's the dumbest thing you've ever spent money on?",
+  "What's a compliment you secretly hate receiving?",
+  "If you had 24 hours with no consequences, what would you actually do?",
+  "What's my most attractive non-physical trait — be specific?",
   "What's one thing you wish you'd done by now?",
   "What's your pettiest hill you will die on?",
-  "Name one thing you've lied about on a resume.",
-  "What's the meanest thing you've said to someone and regretted?",
+  "What's one thing you've exaggerated on a resume or in a story?",
+  "What's the meanest thing you've ever said to someone and regretted?",
   "What's your weirdest recurring dream?",
+  "What's the moment you first realized you had feelings for me?",
 ];
 
 const TOD_DARES: string[] = [
-  "Do your best impression of your partner for 30 seconds.",
-  "Text a friend saying 'I need to confess something' then say 'nvm' when they ask.",
-  "Do 15 pushups right now.",
-  "Let your partner post anything they want on your social media for the next 60 seconds.",
-  "Give your partner a 30-second foot rub.",
-  "Sing the chorus of the last song you listened to.",
-  "Do your best dance move for 20 seconds.",
-  "Let your partner style your hair any way they want.",
-  "Write a haiku about your partner in 60 seconds and read it out loud.",
-  "Do a full cartwheel (or attempt — points for effort).",
-  "Call someone and say 'I can't talk right now, I'm being held hostage by my partner for a dare.' Then hang up.",
-  "Let your partner pick your outfit for tomorrow.",
-  "Say three nice things about your partner in a dramatic movie-trailer voice.",
-  "Do your most convincing cry for 15 seconds.",
-  "Eat a spoonful of something your partner picks from the fridge.",
-  "Attempt to juggle for 30 seconds with whatever's in reach.",
-  "Send your partner a selfie with the worst face you can make.",
-  "Talk in only questions for the next 2 minutes.",
-  "Do a handstand against a wall. (Or attempt.)",
-  "Let your partner draw on your face with a marker for 20 seconds.",
-  "Do your best animal impression and let your partner guess.",
-  "Eat the next thing you drink from a bowl with a spoon.",
-  "Send a voice message to a friend of just laughter.",
-  "Act out a scene from the last movie you watched — your partner has to guess.",
-  "Balance a book on your head and walk across the room.",
-  "Do 10 jumping jacks while spelling your partner's full name.",
-  "Let your partner give you a new pet name and you have to use it until the next round.",
-  "Let your partner pick your profile picture — they get final say.",
-  "Do a 30-second freestyle rap about this game.",
-  "Pick up anything random and use it as a microphone for a song of your partner's choice.",
+  "Send me a selfie with the goofiest face you can make — right now.",
+  "Record a 10-second voice message of your best impression of me.",
+  "Text me three things you love about me in a row, no breaks.",
+  "Send me a picture of the weirdest thing within arm's reach.",
+  "Send me a voice message singing the chorus of the last song you listened to.",
+  "Send a 5-second video of your best dance move.",
+  "Write me a haiku about us in 60 seconds and send it.",
+  "Text me the last 3 emojis you used — don't edit the list.",
+  "Send me a screenshot of your phone's home screen right now.",
+  "Record a voice note whispering something you've never said out loud to me.",
+  "Send a selfie with your hair as chaotic as you can get it in 30 seconds.",
+  "Send a picture of the first thing you see when you look up.",
+  "Send a voice message of you laughing for 10 seconds straight.",
+  "Text me a compliment about me using only movie-trailer voice words (DRAMATIC LIKE THIS).",
+  "Send a selfie making your most convincing fake-cry face.",
+  "Type a 3-word love note and send it.",
+  "Send me a picture of something in your space that reminds you of me.",
+  "Talk only in questions in your next 3 texts to me.",
+  "Record a voice note describing my laugh in detail.",
+  "Send a selfie with your most pouty 'I miss you' face.",
+  "Do your best animal impression in a 5-second video and I have to guess.",
+  "Send a voice note of a whispered secret only I'd care about.",
+  "Text me the first thing that comes to mind when I say your favorite color.",
+  "Send a picture pretending to be doing something dramatic — you pick.",
+  "Send me your most flattering selfie right this second, no retakes.",
+  "Record a 10-second freestyle rap about our relationship.",
+  "Pick something in reach and use it as a microphone — send a video of you singing to me.",
+  "Send me a photo of the last thing you ate.",
+  "Voice note me reading the last text you sent me but in a sexy news-anchor voice.",
+  "Send me a selfie and caption it as if it's the movie poster for our life.",
 ];
 
 const SPICY_TRUTHS: string[] = [
@@ -436,23 +440,18 @@ type LoveTriviaQuestion = {
   choices: string[];
 };
 
-type LoveTriviaRoundResult = {
-  questionId: string;
-  answers: [number, number];
-  matched: boolean;
-};
-
 type LoveTriviaState = {
   gameId: "love-trivia";
   players: [
     { clientId: string; name: string },
     { clientId: string; name: string },
   ];
+  phase: "setup" | "game" | "done";
   questions: LoveTriviaQuestion[];
+  setupPredictions: [(number | null)[], (number | null)[]];
+  gameAnswers: [(number | null)[], (number | null)[]];
   currentIdx: number;
-  currentAnswers: [number | null, number | null];
-  matchedCount: number;
-  history: LoveTriviaRoundResult[];
+  scores: [number, number];
   winner: "done" | null;
   startedAt: number;
 };
@@ -1103,17 +1102,24 @@ async function persistGameEnd(room: Room, game: ActiveGame, io: Server): Promise
       }
     } else if (game.gameId === "love-trivia") {
       if (game.winner === "done") {
+        // Cooperative — both players score for however well they
+        // predicted their partner. Up to 20 points each (2 per
+        // correct prediction out of 10).
         outcome = "coop-win";
-        const pointsEach = Math.min(20, game.matchedCount * 2);
-        if (pointsEach > 0) {
-          for (const p of game.players) {
-            pointsAwards.push({
+        const awards: Array<{ clientId: string; delta: number; reason: string }> =
+          [];
+        game.players.forEach((p, idx) => {
+          const score = game.scores[idx];
+          const delta = Math.min(20, score * 2);
+          if (delta > 0) {
+            awards.push({
               clientId: p.clientId,
-              delta: pointsEach,
-              reason: `love-trivia ${game.matchedCount}/10`,
+              delta,
+              reason: `couples-trivia ${score}/10`,
             });
           }
-        }
+        });
+        for (const award of awards) pointsAwards.push(award);
       }
     } else if (
       game.gameId === "truth-or-dare" ||
@@ -1603,17 +1609,25 @@ io.on("connection", (socket: Socket) => {
         startedAt: Date.now(),
       };
     } else if (gameId === "love-trivia") {
+      const questions = pickLoveTriviaQuestions(10);
       game = {
         gameId: "love-trivia",
         players: [
           { clientId: me.clientId, name: me.name },
           { clientId: other.clientId, name: other.name },
         ],
-        questions: pickLoveTriviaQuestions(10),
+        phase: "setup",
+        questions,
+        setupPredictions: [
+          new Array(questions.length).fill(null),
+          new Array(questions.length).fill(null),
+        ],
+        gameAnswers: [
+          new Array(questions.length).fill(null),
+          new Array(questions.length).fill(null),
+        ],
         currentIdx: 0,
-        currentAnswers: [null, null],
-        matchedCount: 0,
-        history: [],
+        scores: [0, 0],
         winner: null,
         startedAt: Date.now(),
       };
@@ -1693,6 +1707,7 @@ io.on("connection", (socket: Socket) => {
         | "drop"
         | "reportGameOver"
         | "answer"
+        | "setupPredict"
         | "pickPrompt"
         | "completePrompt"
         | "skipPrompt"
@@ -1716,6 +1731,8 @@ io.on("connection", (socket: Socket) => {
       loserIdx?: 0 | 1;
       // love-trivia / trivia
       choice?: number;
+      // love-trivia setup phase
+      qIdx?: number;
       // truth-or-dare / spicy-zone
       promptType?: "truth" | "dare";
       // word-chain
@@ -2023,38 +2040,73 @@ io.on("connection", (socket: Socket) => {
         if (myIdx === null) return;
         if (game.winner !== null) return;
 
-        if (payload?.action === "answer") {
-          const choice = payload.choice;
+        const choice = payload?.choice;
+        const qIdx = payload?.qIdx;
+
+        if (payload?.action === "setupPredict") {
+          // Parallel prediction during setup phase. myIdx submits a
+          // prediction about partner's answer at position qIdx.
+          if (game.phase !== "setup") return;
+          if (
+            typeof choice !== "number" ||
+            choice < 0 ||
+            choice > 3 ||
+            typeof qIdx !== "number" ||
+            qIdx < 0 ||
+            qIdx >= game.questions.length
+          ) {
+            return;
+          }
+          if (game.setupPredictions[myIdx][qIdx] !== null) return;
+          game.setupPredictions[myIdx][qIdx] = choice;
+
+          // Transition to game phase once BOTH players have answered
+          // every question in setup.
+          const allDoneMe = game.setupPredictions[myIdx].every(
+            (v) => v !== null,
+          );
+          const otherIdx: 0 | 1 = myIdx === 0 ? 1 : 0;
+          const allDoneOther = game.setupPredictions[otherIdx].every(
+            (v) => v !== null,
+          );
+          if (allDoneMe && allDoneOther) {
+            game.phase = "game";
+            game.currentIdx = 0;
+          }
+          changed = true;
+        } else if (payload?.action === "answer") {
+          // Game phase — player answers for themselves about the
+          // current question.
+          if (game.phase !== "game") return;
           if (
             typeof choice !== "number" ||
             choice < 0 ||
             choice > 3
-          )
-            return;
-          // Ignore double-submits for the same round
-          if (game.currentAnswers[myIdx] !== null) return;
-          game.currentAnswers[myIdx] = choice;
-
-          // If both players answered, evaluate the round
-          if (
-            game.currentAnswers[0] !== null &&
-            game.currentAnswers[1] !== null
           ) {
-            const a0 = game.currentAnswers[0];
-            const a1 = game.currentAnswers[1];
-            const matched = a0 === a1;
-            const question = game.questions[game.currentIdx];
-            game.history.push({
-              questionId: question.id,
-              answers: [a0, a1],
-              matched,
-            });
-            if (matched) game.matchedCount += 1;
+            return;
+          }
+          const idx = game.currentIdx;
+          if (idx >= game.questions.length) return;
+          if (game.gameAnswers[myIdx][idx] !== null) return;
+          game.gameAnswers[myIdx][idx] = choice;
+
+          // Once both players have answered the current round, score
+          // and advance.
+          const a0 = game.gameAnswers[0][idx];
+          const a1 = game.gameAnswers[1][idx];
+          if (a0 !== null && a1 !== null) {
+            // p0 scored if p0's prediction about p1 (setupPredictions[0][idx])
+            // matches p1's actual answer (a1)
+            if (game.setupPredictions[0][idx] === a1) {
+              game.scores[0] += 1;
+            }
+            if (game.setupPredictions[1][idx] === a0) {
+              game.scores[1] += 1;
+            }
             game.currentIdx += 1;
-            game.currentAnswers = [null, null];
-            // End of game after 10 rounds
             if (game.currentIdx >= game.questions.length) {
               game.winner = "done";
+              game.phase = "done";
             }
           }
           changed = true;

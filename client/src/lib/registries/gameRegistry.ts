@@ -177,11 +177,11 @@ registerGame({
 
 registerGame({
   id: "love-trivia",
-  name: "Love Trivia",
+  name: "Couples Trivia",
   category: "couples",
   description:
-    "10 rounds of 'what would your partner pick.' Match to score. Cooperative.",
-  emoji: "💭",
+    "Two phases: predict your partner's answers, then answer for yourself. See how well you two know each other.",
+  emoji: "💞",
   tier: 0,
   pointsOnWin: 20,
   status: "ready",

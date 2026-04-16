@@ -1,0 +1,20 @@
+{
+  "name": "Swoono — A room for the two of you",
+  "short_name": "Swoono",
+  "description": "A synced private room for two. Notes, games, little gestures — live, together.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0614",
+  "theme_color": "#ff4d8f",
+  "categories": ["social", "lifestyle", "entertainment"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

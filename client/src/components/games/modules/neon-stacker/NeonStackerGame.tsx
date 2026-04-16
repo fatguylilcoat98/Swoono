@@ -374,7 +374,7 @@ export default function NeonStackerGame({
     });
 
     const loop = () => {
-      updateEngine(state, canvasSize);
+      updateEngine(state, canvasSize, game?.level ?? 1);
       drawEngine(state, canvas, canvasSize);
       state.rafId = requestAnimationFrame(loop);
     };
@@ -435,8 +435,8 @@ export default function NeonStackerGame({
       Matter.World.add(state.world, newPlatform);
       state.platform = newPlatform;
       state.platformWidth = newWidth;
-      setMessage(`LEVEL ${game.level}`);
-      window.setTimeout(() => setMessage(""), 1500);
+      setMessage(`🔥 LEVEL ${game.level} — crane faster, platform smaller`);
+      window.setTimeout(() => setMessage(""), 2500);
     }
   }, [game?.level, canvasSize.w, canvasSize.h]);
 
@@ -548,16 +548,16 @@ export default function NeonStackerGame({
       <div
         ref={containerRef}
         className="flex-1 relative overflow-hidden rounded-lg border border-white/5 bg-black"
-        style={{ minHeight: 480 }}
+        style={{ minHeight: 380 }}
       >
         <canvas
           ref={canvasRef}
-          onPointerDown={handleTap}
           style={{
             width: "100%",
             height: "100%",
             display: "block",
             touchAction: "none",
+            pointerEvents: "none",
           }}
         />
         {message && (
@@ -570,9 +570,34 @@ export default function NeonStackerGame({
         )}
       </div>
 
-      <p className="text-center text-[10px] uppercase tracking-widest text-swoono-dim mt-3">
-        ⬇ Tap to drop
-      </p>
+      <button
+        onClick={handleTap}
+        disabled={
+          game.winnerIdx !== null ||
+          !myTurn
+        }
+        className="mt-4 w-full py-5 rounded-xl font-bold uppercase tracking-[0.3em] text-lg transition-colors border-2 disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{
+          background: myTurn
+            ? "rgb(var(--swoono-accent) / 0.25)"
+            : "rgba(255,255,255,0.05)",
+          borderColor: myTurn
+            ? "rgb(var(--swoono-accent))"
+            : "rgba(255,255,255,0.1)",
+          color: myTurn ? "#fff" : "rgba(255,255,255,0.4)",
+          boxShadow: myTurn
+            ? "0 0 30px rgb(var(--swoono-accent) / 0.4)"
+            : "none",
+        }}
+      >
+        {game.winnerIdx !== null
+          ? game.winnerIdx === myIdx
+            ? "You won"
+            : "You lost"
+          : myTurn
+            ? "⬇ DROP ⬇"
+            : "Waiting on opponent…"}
+      </button>
     </div>
   );
 }
@@ -646,13 +671,16 @@ function applyDrop(
 function updateEngine(
   state: EngineState,
   canvasSize: { w: number; h: number },
+  level: number,
 ) {
   state.time += 1 / 60;
   Matter.Engine.update(state.engine, 1000 / 60);
 
-  // Crane motion
+  // Crane motion. Speed scales with level: +15% per level past 1,
+  // capped at level 8. By level 8 the crane is ~2x base speed.
   if (!state.isDropping && !state.waitingForStable && state.currentBlock) {
-    state.craneTime += 0.025;
+    const levelFactor = 1 + Math.min(7, Math.max(0, level - 1)) * 0.15;
+    state.craneTime += 0.025 * levelFactor;
     const range = canvasSize.w * 0.38;
     state.craneX = canvasSize.w / 2 + Math.sin(state.craneTime) * range;
     Matter.Body.setPosition(state.currentBlock, {
