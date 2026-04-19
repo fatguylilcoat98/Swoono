@@ -1,7 +1,7 @@
 {
   "name": "swoono",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A synced shared room for two people",
   "workspaces": [
     "client",
