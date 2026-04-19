@@ -29,7 +29,7 @@ See `INTEGRATION_NOTES` at the bottom of this file for how existing work
 ## Stack
 
 - **Client:** Vite + React 18 + TypeScript + Tailwind + Framer Motion + Zustand + socket.io-client
-- **Server:** Express + Socket.IO (in-memory rooms, no DB)
+- **Server:** Express + Socket.IO with Supabase persistence
 - **Deployment:** one Render web service — Express serves Socket.IO *and* the built client
 - **Monorepo:** npm workspaces (`client`, `server`)
 
@@ -58,6 +58,16 @@ Then open http://localhost:3001.
 
 ## Deploy to Render
 
+### Step 1: Set up Supabase
+
+1. Create a new project at [supabase.com](https://supabase.com)
+2. Go to **SQL Editor** and run the schema in `server/db/schema.sql`
+3. Go to **Settings** → **API** and copy:
+   - Project URL (looks like `https://xxxxx.supabase.co`)
+   - Service Role Key (secret key, **not** the anon key)
+
+### Step 2: Deploy to Render
+
 The repo includes `render.yaml`. Create a new Web Service on Render, connect
 the GitHub repo, and Render picks up the service automatically:
 
@@ -65,9 +75,20 @@ the GitHub repo, and Render picks up the service automatically:
 - **Start:** `npm start`
 - **Plan:** free (good for two-person testing; spins down after 15 min idle)
 
+### Step 3: Configure Environment Variables
+
+In your Render dashboard, set these environment variables:
+
+| Key | Value |
+|-----|-------|
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase service role key |
+
+**Important:** The service role key bypasses Row Level Security. Never expose it to clients.
+
 ## Integration notes (where existing code plugs in)
 
 - **Battleship:** implement the `Game` interface in `client/src/lib/registries/gameRegistry.ts`, drop the module under `client/src/components/games/modules/battleship/`, and register it. The `GameMenu` will render its card automatically.
 - **Animations (existing reward effects):** the reward system dispatches an `EffectPayload` via `effectRegistry.trigger(effectId, context)`. Drop each existing animation component behind one registered effect id.
 - **Music / audio reactive:** `client/src/lib/registries/audioAdapter.ts` currently runs a `SimulatedBeat` provider. Implement the `AudioProvider` interface (`start`, `stop`, `onFrame(beat)`) with a real source (Spotify SDK, mic input, etc.) and swap the default provider.
-- **Persistence:** rooms and notes are in-memory today. When you want to keep state across Render restarts, swap the `rooms` Map in `server/src/index.ts` for Redis or Supabase.
+- **Persistence:** All data is persisted in Supabase (rooms, notes, points, games, rewards, locations). No data is lost on server restarts.

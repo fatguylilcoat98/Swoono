@@ -133,11 +133,52 @@ type BattleshipInternal = {
   startedAt: number;
 };
 
+type DrawingStroke = {
+  id: string;
+  points: { x: number; y: number }[];
+  color: string;
+  width: number;
+  timestamp: number;
+};
+
+type DrawingData = {
+  strokes: DrawingStroke[];
+  canvasDataUrl?: string;
+};
+
+type DrawingJudge = "fido" | "reginald" | "veloura";
+
+type JudgeScore = {
+  judge: DrawingJudge;
+  score: number;
+  comment: string;
+  revealed: boolean;
+};
+
+type DrawingGameState = {
+  gameId: "drawing";
+  phase: "drawing" | "reveal" | "judging" | "complete";
+  prompt: string;
+  timeLimit: number;
+  timeRemaining: number;
+  players: {
+    [clientId: string]: {
+      name: string;
+      drawing: DrawingData;
+      readyForReveal: boolean;
+    };
+  };
+  judgeScores: JudgeScore[];
+  currentJudgeIdx: number;
+  startedAt: number;
+};
+
 type ActiveGame =
   | TicTacToeState
   | ConnectFourState
   | HangmanState
-  | BattleshipInternal;
+  | BattleshipInternal
+  | DrawingGameState;
 
 type Room = {
   code: string;
@@ -335,6 +376,139 @@ function checkHangmanWin(word: string, guessed: string[]): boolean {
   return word.split("").every((ch) => guessed.includes(ch));
 }
 
+// --- Drawing game helpers ---
+
+function generateDrawingPrompt(): string {
+  const prompts = [
+    "A romantic picnic on Mars",
+    "A dancing elephant in a tutu",
+    "Your dream vacation spot",
+    "A superhero made of pizza",
+    "A cat that's also a wizard",
+    "The world's worst haircut",
+    "A house made of candy",
+    "A robot having an existential crisis",
+    "Your partner as a cartoon character",
+    "The last thing you ate, but with arms and legs",
+    "A dinosaur trying to use a smartphone",
+    "The contents of your pocket, but alive",
+    "A tree growing donuts instead of leaves",
+    "A fish giving a business presentation",
+    "Your favorite movie if it was set in space",
+    "A monster that's afraid of the dark",
+    "A cloud with a really bad day",
+    "Your perfect date, but everything is tiny",
+    "A sandwich that's plotting world domination",
+    "The inside of a vending machine's dreams"
+  ];
+  return prompts[Math.floor(Math.random() * prompts.length)];
+}
+
+function generateJudgeScore(judge: "fido" | "reginald" | "veloura", prompt: string): { score: number; comment: string } {
+  const score = Math.floor(Math.random() * 10) + 1;
+
+  if (judge === "fido") {
+    const fidoLines = [
+      "tail is wagging at MAXIMUM speed",
+      "I like this. Can I have a treat now?",
+      "good drawing. good human.",
+      "I don't get it but I love it",
+      "this makes my heart go bork bork",
+      "would definitely sniff this drawing",
+      "looks like something I'd chase in the park",
+      "reminds me of my favorite stick",
+      "this deserves ALL the belly rubs",
+      "I want to play fetch with whatever this is",
+      "very good! much art! wow!",
+      "this drawing smells like happiness",
+    ];
+    return {
+      score: Math.max(6, score), // Fido tends to score higher
+      comment: fidoLines[Math.floor(Math.random() * fidoLines.length)],
+    };
+  } else if (judge === "reginald") {
+    const reginaldLines = [
+      "I've seen worse. Not often, but I have.",
+      "confusing, but oddly committed",
+      "I resent that I like this",
+      "bold. deeply unfortunate, but bold",
+      "this challenges my very understanding of art",
+      "reminds me of my nephew's finger painting phase",
+      "technically... well, no, it's not technical at all",
+      "I suppose someone will find this charming",
+      "the composition lacks... everything, really",
+      "surprisingly not the worst thing I've judged today",
+      "abstract in the sense that I cannot tell what it is",
+      "daring choice to ignore all artistic conventions",
+    ];
+    return {
+      score,
+      comment: reginaldLines[Math.floor(Math.random() * reginaldLines.length)],
+    };
+  } else { // veloura
+    const velouraLines = [
+      "this has flair. I respect the drama",
+      "oh we're SERVING tonight",
+      "I don't understand it... but I feel it",
+      "this is chaotic, but beautifully chaotic",
+      "this needs confidence. and maybe a redo",
+      "giving me avant-garde vibes, darling",
+      "not what I expected, but I'm here for it",
+      "this drawing said 'I have ARRIVED'",
+      "pure artistic expression, honey",
+      "I see the vision... sort of",
+      "this is giving me life right now",
+      "fabulous in its own unique way, sweetie",
+    ];
+    return {
+      score: score <= 3 ? Math.max(4, score) : score, // Veloura avoids very low scores
+      comment: velouraLines[Math.floor(Math.random() * velouraLines.length)],
+    };
+  }
+}
+
+function advanceToReveal(game: any, room: Room) {
+  if (game.gameId !== "drawing") return;
+
+  game.phase = "reveal";
+
+  // After a delay, start judging
+  setTimeout(() => {
+    if (game.phase === "reveal") {
+      startJudging(game, room);
+    }
+  }, 3000);
+
+  emitGameUpdate(room);
+}
+
+function startJudging(game: any, room: Room) {
+  if (game.gameId !== "drawing") return;
+
+  game.phase = "judging";
+
+  // Generate judge scores
+  const judges: ("fido" | "reginald" | "veloura")[] = ["fido", "reginald", "veloura"];
+  game.judgeScores = judges.map(judge => ({
+    judge,
+    ...generateJudgeScore(judge, game.prompt),
+    revealed: false,
+  }));
+
+  // Complete judging after all judges have "spoken"
+  setTimeout(() => {
+    if (game.phase === "judging") {
+      game.phase = "complete";
+      emitGameUpdate(room);
+
+      // Award points and record game
+      persistGameEnd(room, game, io);
+    }
+  }, 8000); // 8 seconds for all judges to reveal
+
+  emitGameUpdate(room);
+}
+
 // --- Battleship helpers ---
 const BS_GRID = 10;
 const BS_FLEET_DEF: { name: string; len: number }[] = [
@@ -405,6 +579,7 @@ function validateFleetPlacement(
 
 function isGameOver(game: ActiveGame): boolean {
   if (game.gameId === "battleship") return game.winnerIdx !== null;
+  if (game.gameId === "drawing") return game.phase === "complete";
   return game.winner !== null;
 }
 
@@ -414,7 +589,6 @@ function isGameOver(game: ActiveGame): boolean {
  * failures are logged but must not break the live game flow.
  */
 async function persistGameEnd(room: Room, game: ActiveGame, io: Server): Promise<void> {
-  if (!USE_DB) return;
   try {
     let winnerClientId: string | null = null;
     let loserClientId: string | null = null;
@@ -623,48 +797,35 @@ io.on("connection", (socket: Socket) => {
 
     const room = getOrCreateRoom(rawCode);
 
-    if (USE_DB) {
-      // Persistent path: authoritative ownership + notes live in Supabase.
-      try {
-        const { room: dbRoom } = await dbJoinRoom(rawCode, clientId, name);
-        room.owners = dbRoom.owner_client_ids || [];
-        // Load notes from DB into in-memory cache so existing code paths work.
-        const dbNotes = await dbListNotes(rawCode, MAX_NOTES_PER_ROOM);
-        room.notes = dbNotes.map((n) => ({
-          id: n.id,
-          roomCode: n.room_code,
-          authorClientId: n.author_client_id,
-          authorName: n.author_name,
-          text: n.text,
-          color: n.color,
-          createdAt: new Date(n.created_at).getTime(),
-        }));
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (message === "room_locked") {
-          ack?.({
-            ok: false,
-            error: "Room is full (2 players maximum)",
-          });
-          return;
-        }
-        console.error("[swoono] join DB error:", err);
-        ack?.({ ok: false, error: "Server error joining room" });
+    // Persistent path: authoritative ownership + notes live in Supabase.
+    try {
+      const { room: dbRoom } = await dbJoinRoom(rawCode, clientId, name);
+      room.owners = dbRoom.owner_client_ids || [];
+      // Load notes from DB into in-memory cache so existing code paths work.
+      const dbNotes = await dbListNotes(rawCode, MAX_NOTES_PER_ROOM);
+      room.notes = dbNotes.map((n) => ({
+        id: n.id,
+        roomCode: n.room_code,
+        authorClientId: n.author_client_id,
+        authorName: n.author_name,
+        text: n.text,
+        color: n.color,
+        createdAt: new Date(n.created_at).getTime(),
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === "room_locked") {
+        ack?.({
+          ok: false,
+          error: "Room is full (2 players maximum)",
+        });
         return;
       }
-    } else {
-      // In-memory fallback (dev mode). Lock to the first two clientIds.
-      if (!room.owners.includes(clientId)) {
-        if (room.owners.length >= MAX_PEERS_PER_ROOM) {
-          ack?.({
-            ok: false,
-            error: "Room is full (2 players maximum)",
-          });
-          return;
-        }
-        room.owners.push(clientId);
-      }
+      console.error("[swoono] join DB error:", err);
+      ack?.({ ok: false, error: "Server error joining room" });
+      return;
     }
+    // Database is now required - no in-memory fallback
 
     // Rebind / add socket for the peer.
     const existing = room.peers.get(clientId);
@@ -691,14 +852,12 @@ io.on("connection", (socket: Socket) => {
     io.to(rawCode).emit("presence", { peers: publicPeers(room) });
 
     // Sync current points to the joining client
-    if (USE_DB) {
-      try {
-        const balances = await pointsBalances(rawCode);
-        const clientPoints = balances[clientId] || 0;
-        socket.emit("points:sync", { clientId, points: clientPoints });
-      } catch (err) {
-        console.error("[swoono] join points sync error:", err);
-      }
+    try {
+      const balances = await pointsBalances(rawCode);
+      const clientPoints = balances[clientId] || 0;
+      socket.emit("points:sync", { clientId, points: clientPoints });
+    } catch (err) {
+      console.error("[swoono] join points sync error:", err);
     }
 
     // If a game is already in progress (player rejoining), send them its state.
@@ -723,39 +882,27 @@ io.on("connection", (socket: Socket) => {
 
     let note: Note;
 
-    if (USE_DB) {
-      try {
-        const row = await dbInsertNote({
-          room_code: room.code,
-          author_client_id: me.clientId,
-          author_name: me.name,
-          text,
-          color,
-        });
-        note = {
-          id: row.id,
-          roomCode: row.room_code,
-          authorClientId: row.author_client_id,
-          authorName: row.author_name,
-          text: row.text,
-          color: row.color,
-          createdAt: new Date(row.created_at).getTime(),
-        };
-        await dbTouchRoom(room.code);
-      } catch (err) {
-        console.error("[swoono] note:create DB error:", err);
-        return;
-      }
-    } else {
-      note = {
-        id: makeId(),
-        roomCode: room.code,
-        authorClientId: me.clientId,
-        authorName: me.name,
+    try {
+      const row = await dbInsertNote({
+        room_code: room.code,
+        author_client_id: me.clientId,
+        author_name: me.name,
         text,
         color,
-        createdAt: Date.now(),
+      });
+      note = {
+        id: row.id,
+        roomCode: row.room_code,
+        authorClientId: row.author_client_id,
+        authorName: row.author_name,
+        text: row.text,
+        color: row.color,
+        createdAt: new Date(row.created_at).getTime(),
       };
+      await dbTouchRoom(room.code);
+    } catch (err) {
+      console.error("[swoono] note:create DB error:", err);
+      return;
     }
 
     room.notes.push(note);
@@ -848,6 +995,49 @@ io.on("connection", (socket: Socket) => {
         winnerIdx: null,
         startedAt: Date.now(),
       };
+    } else if (gameId === "drawing") {
+      const prompt = generateDrawingPrompt();
+      game = {
+        gameId: "drawing",
+        phase: "drawing",
+        prompt,
+        timeLimit: 120, // 2 minutes
+        timeRemaining: 120,
+        players: {
+          [me.clientId]: {
+            name: me.name,
+            drawing: { strokes: [] },
+            readyForReveal: false,
+          },
+          [other.clientId]: {
+            name: other.name,
+            drawing: { strokes: [] },
+            readyForReveal: false,
+          },
+        },
+        judgeScores: [],
+        currentJudgeIdx: 0,
+        startedAt: Date.now(),
+      };
+
+      // Start countdown timer
+      const countdown = setInterval(() => {
+        if (game && game.gameId === "drawing" && game.phase === "drawing") {
+          game.timeRemaining = Math.max(0, game.timeRemaining - 1);
+          if (game.timeRemaining <= 0) {
+            clearInterval(countdown);
+            // Auto-advance to reveal if time runs out
+            setTimeout(() => {
+              if (game && game.gameId === "drawing" && game.phase === "drawing") {
+                advanceToReveal(game, room);
+              }
+            }, 2000);
+          }
+          emitGameUpdate(room);
+        } else {
+          clearInterval(countdown);
+        }
+      }, 1000);
     } else {
       return; // unknown game id
     }
@@ -863,7 +1053,7 @@ io.on("connection", (socket: Socket) => {
       cellIndex?: number;
       column?: number;
       letter?: string;
-      action?: "place" | "fire";
+      action?: "place" | "fire" | "add-stroke" | "ready-for-reveal";
       ships?: {
         name: string;
         len: number;
@@ -873,6 +1063,7 @@ io.on("connection", (socket: Socket) => {
       }[];
       x?: number;
       y?: number;
+      stroke?: any; // DrawingStroke type
     }) => {
       if (!joinedCode) return;
       const room = rooms.get(joinedCode);
@@ -1042,6 +1233,28 @@ io.on("connection", (socket: Socket) => {
             (game.nextPlayerIdx + 1) % game.players.length;
         }
         changed = true;
+      } else if (game.gameId === "drawing") {
+        // Handle drawing actions
+        const action = (payload as any)?.action;
+
+        if (action === "add-stroke") {
+          const stroke = (payload as any).stroke;
+          if (stroke && game.players[me.clientId] && game.phase === "drawing") {
+            game.players[me.clientId].drawing.strokes.push(stroke);
+            changed = true;
+          }
+        } else if (action === "ready-for-reveal") {
+          if (game.players[me.clientId] && game.phase === "drawing") {
+            game.players[me.clientId].readyForReveal = true;
+
+            // Check if both players are ready
+            const allReady = Object.values(game.players).every((p: any) => p.readyForReveal);
+            if (allReady) {
+              advanceToReveal(game, room);
+            }
+            changed = true;
+          }
+        }
       }
 
       if (changed) {
@@ -1101,7 +1314,7 @@ io.on("connection", (socket: Socket) => {
       // socket.to() excludes the sender automatically.
       socket.to(room.code).emit("effect:receive", forwarded);
 
-      if (USE_DB && toClientId) {
+      if (toClientId) {
         try {
           await dbLogRewardEvent({
             room_code: room.code,
@@ -1147,7 +1360,7 @@ io.on("connection", (socket: Socket) => {
         return;
       }
 
-      if (!USE_DB) return; // distance needs persistence for both peers
+      // Distance feature requires persistence for both peers
 
       try {
         await dbUpdatePeerLocation(
@@ -1174,7 +1387,7 @@ io.on("connection", (socket: Socket) => {
 
 
   socket.on("points:get", async (ack?: (res: { points: number }) => void) => {
-    if (!joinedCode || !USE_DB) {
+    if (!joinedCode) {
       ack?.({ points: 0 });
       return;
     }
@@ -1216,6 +1429,18 @@ setInterval(() => {
   }
 }, 60_000);
 
+// Require database configuration for production - no in-memory fallback
+if (!USE_DB) {
+  console.error(`[swoono] FATAL: Supabase database not configured.
+
+Required environment variables:
+  SUPABASE_URL=https://your-project-ref.supabase.co
+  SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+Set these in your deployment environment and restart.`);
+  process.exit(1);
+}
+
 server.listen(PORT, () => {
-  console.log(`[swoono] listening on :${PORT}`);
+  console.log(`[swoono] listening on :${PORT} with Supabase persistence`);
 });

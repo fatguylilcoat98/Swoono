@@ -49,6 +49,7 @@ type RoomState = {
     }[],
   ) => void;
   fireBattleshipShot: (x: number, y: number) => void;
+  makeDrawingMove: (action: "add-stroke" | "ready-for-reveal", data?: any) => void;
   pushLocation: (lat: number, lng: number, accuracyM?: number) => void;
   exitGame: () => void;
 };
@@ -202,6 +203,14 @@ export const useRoomStore = create<RoomState>((set, get) => {
 
     fireBattleshipShot: (x, y) => {
       socket.emit("game:move", { action: "fire", x, y });
+    },
+
+    makeDrawingMove: (action, data) => {
+      if (action === "add-stroke") {
+        socket.emit("game:move", { action: "add-stroke", stroke: data });
+      } else if (action === "ready-for-reveal") {
+        socket.emit("game:move", { action: "ready-for-reveal" });
+      }
     },
 
     pushLocation: (lat, lng, accuracyM) => {

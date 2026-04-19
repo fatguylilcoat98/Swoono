@@ -3,6 +3,7 @@ import TicTacToeGame from "../../components/games/modules/tic-tac-toe/TicTacToeG
 import ConnectFourGame from "../../components/games/modules/connect-four/ConnectFourGame";
 import HangmanGame from "../../components/games/modules/hangman/HangmanGame";
 import BattleshipGame from "../../components/games/modules/battleship/BattleshipGame";
+import DrawingGame from "../../components/games/modules/drawing/DrawingGame";
 
 export type GameCategory = "arcade" | "couples";
 
@@ -128,6 +129,18 @@ registerGame({
 });
 
 // --- Couples ---
+
+registerGame({
+  id: "drawing",
+  name: "Drawing Together",
+  category: "couples",
+  description: "Draw the same prompt together, then get judged by our panel of experts!",
+  emoji: "🎨",
+  tier: 0,
+  pointsOnWin: 15,
+  status: "ready",
+  component: DrawingGame,
+});
 
 registerGame({
   id: "truth-or-dare",

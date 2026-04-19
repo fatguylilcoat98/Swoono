@@ -140,12 +140,55 @@ export type BattleshipState = {
   startedAt: number;
 };
 
+// --- Drawing Game ---
+
+export type DrawingStroke = {
+  id: string;
+  points: { x: number; y: number }[];
+  color: string;
+  width: number;
+  timestamp: number;
+};
+
+export type DrawingData = {
+  strokes: DrawingStroke[];
+  canvasDataUrl?: string; // Base64 screenshot for judging
+};
+
+export type DrawingJudge = "fido" | "reginald" | "veloura";
+
+export type JudgeScore = {
+  judge: DrawingJudge;
+  score: number; // 1-10
+  comment: string;
+  revealed: boolean;
+};
+
+export type DrawingGameState = {
+  gameId: "drawing";
+  phase: "drawing" | "reveal" | "judging" | "complete";
+  prompt: string;
+  timeLimit: number; // seconds
+  timeRemaining: number; // seconds, server-managed
+  players: {
+    [clientId: string]: {
+      name: string;
+      drawing: DrawingData;
+      readyForReveal: boolean;
+    };
+  };
+  judgeScores: JudgeScore[];
+  currentJudgeIdx: number; // Which judge is revealing (0-2)
+  startedAt: number;
+};
+
 /** Union of all game state shapes. Add new games here as they land. */
 export type ActiveGame =
   | TicTacToeState
   | ConnectFourState
   | HangmanState
-  | BattleshipState;
+  | BattleshipState
+  | DrawingGameState;
 
 // --- Production utility types ---------------------------------------------
 
