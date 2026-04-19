@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ActiveGame, Note, Peer, JoinResult } from "../lib/types";
+import type { ActiveGame, GameRecord, Note, Peer, JoinResult } from "../lib/types";
 import { getSocket, CLIENT_ID } from "../lib/socket";
 import {
   triggerEffect,
@@ -27,6 +27,9 @@ type RoomState = {
   distanceMeters: number | null;
   distanceUpdatedAt: number | null;
 
+  // recent game history — drives the Leaderboard "Recent games" list
+  records: GameRecord[];
+
   // points tracking for all peers
   peerPoints: Record<string, number>;
 
@@ -35,6 +38,7 @@ type RoomState = {
   join: (code: string, name: string) => Promise<boolean>;
   leave: () => void;
   sendNote: (text: string, color: string) => void;
+  resetRoom: (force?: boolean) => Promise<boolean>;
   startGame: (gameId: string) => void;
   makeMove: (cellIndex: number) => void;
   dropColumn: (column: number) => void;
@@ -50,6 +54,21 @@ type RoomState = {
   ) => void;
   fireBattleshipShot: (x: number, y: number) => void;
   makeDrawingMove: (action: "add-stroke" | "ready-for-reveal", data?: any) => void;
+  dropNeonStackerBlock: (
+    craneX: number,
+    craneTime: number,
+    shape: { width: number; height: number; name: string },
+  ) => void;
+  reportNeonStackerGameOver: () => void;
+  submitLoveTriviaAnswer: (choice: number) => void;
+  submitLoveTriviaSetupPrediction: (qIdx: number, choice: number) => void;
+  pickPrompt: (promptType: "truth" | "dare") => void;
+  completePrompt: () => void;
+  skipPrompt: () => void;
+  markLovingQuestDone: () => void;
+  submitWordChainWord: (word: string) => void;
+  forfeitWordChain: () => void;
+  submitTriviaAnswer: (choice: number) => void;
   pushLocation: (lat: number, lng: number, accuracyM?: number) => void;
   exitGame: () => void;
 };
@@ -100,6 +119,26 @@ export const useRoomStore = create<RoomState>((set, get) => {
     },
   );
 
+  // Recent game history from the server
+  socket.on("records:update", ({ records }: { records: GameRecord[] }) => {
+    set({ records: Array.isArray(records) ? records : [] });
+  });
+
+  // The other peer hit "Reset Room" — we get ejected and dropped to
+  // the landing screen with a message.
+  socket.on("room:reset:forced", () => {
+    set({
+      code: null,
+      peers: [],
+      notes: [],
+      activeGame: null,
+      distanceMeters: null,
+      distanceUpdatedAt: null,
+      joinError: "The other person reset this room. Start fresh.",
+      peerPoints: {},
+    });
+  });
+
   // Listen for points sync from server
   socket.on("points:sync", ({ clientId, points }: { clientId: string; points: number }) => {
     // Update peer points tracking for all clients
@@ -125,6 +164,7 @@ export const useRoomStore = create<RoomState>((set, get) => {
     activeGame: null,
     distanceMeters: null,
     distanceUpdatedAt: null,
+    records: [],
     peerPoints: {},
 
     setDisplayName: (name) => set({ displayName: name }),
@@ -144,6 +184,7 @@ export const useRoomStore = create<RoomState>((set, get) => {
                 code: res.room.code,
                 peers: res.room.peers,
                 notes: res.room.notes,
+                records: res.room.records || [],
                 displayName,
                 joining: false,
                 joinError: null,
@@ -172,6 +213,37 @@ export const useRoomStore = create<RoomState>((set, get) => {
         distanceUpdatedAt: null,
         joinError: null,
         peerPoints: {},
+        records: [],
+      });
+    },
+
+    resetRoom: async (force = false) => {
+      const currentCode = get().code;
+      if (!currentCode) return false;
+      return new Promise<boolean>((resolve) => {
+        socket.emit(
+          "room:reset",
+          { code: currentCode, clientId: CLIENT_ID, force },
+          (res: { ok: boolean; error?: string }) => {
+            if (res?.ok) {
+              // Drop everything locally — it's gone server-side now.
+              set({
+                code: null,
+                peers: [],
+                notes: [],
+                activeGame: null,
+                distanceMeters: null,
+                distanceUpdatedAt: null,
+                joinError: null,
+                peerPoints: {},
+              });
+              resolve(true);
+            } else {
+              set({ joinError: res?.error || "Could not reset room" });
+              resolve(false);
+            }
+          },
+        );
       });
     },
 
@@ -211,6 +283,55 @@ export const useRoomStore = create<RoomState>((set, get) => {
       } else if (action === "ready-for-reveal") {
         socket.emit("game:move", { action: "ready-for-reveal" });
       }
+    },
+
+    dropNeonStackerBlock: (craneX, craneTime, shape) => {
+      socket.emit("game:move", {
+        action: "drop",
+        craneX,
+        craneTime,
+        shape,
+      });
+    },
+
+    reportNeonStackerGameOver: () => {
+      socket.emit("game:move", { action: "reportGameOver" });
+    },
+
+    submitLoveTriviaAnswer: (choice) => {
+      socket.emit("game:move", { action: "answer", choice });
+    },
+
+    submitLoveTriviaSetupPrediction: (qIdx, choice) => {
+      socket.emit("game:move", { action: "setupPredict", qIdx, choice });
+    },
+
+    pickPrompt: (promptType: "truth" | "dare") => {
+      socket.emit("game:move", { action: "pickPrompt", promptType });
+    },
+
+    completePrompt: () => {
+      socket.emit("game:move", { action: "completePrompt" });
+    },
+
+    skipPrompt: () => {
+      socket.emit("game:move", { action: "skipPrompt" });
+    },
+
+    markLovingQuestDone: () => {
+      socket.emit("game:move", { action: "markDone" });
+    },
+
+    submitWordChainWord: (word: string) => {
+      socket.emit("game:move", { action: "submitWord", word });
+    },
+
+    forfeitWordChain: () => {
+      socket.emit("game:move", { action: "forfeit" });
+    },
+
+    submitTriviaAnswer: (choice: number) => {
+      socket.emit("game:move", { action: "answer", choice });
     },
 
     pushLocation: (lat, lng, accuracyM) => {

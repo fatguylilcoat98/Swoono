@@ -6,10 +6,12 @@ import {
   isDbConfigured,
   joinRoom as dbJoinRoom,
   touchRoom as dbTouchRoom,
+  wipeRoom as dbWipeRoom,
   listNotes as dbListNotes,
   insertNote as dbInsertNote,
   recordPoints as dbRecordPoints,
   recordGame as dbRecordGame,
+  listGameRecords as dbListGameRecords,
   logRewardEvent as dbLogRewardEvent,
   updatePeerLocation as dbUpdatePeerLocation,
   listPeerLocations as dbListPeerLocations,
@@ -133,6 +135,8 @@ type BattleshipInternal = {
   startedAt: number;
 };
 
+// --- Drawing Game ---
+
 type DrawingStroke = {
   id: string;
   points: { x: number; y: number }[];
@@ -173,12 +177,918 @@ type DrawingGameState = {
   startedAt: number;
 };
 
+// --- Prompt game (Truth or Dare / Spicy Zone shared engine) ---
+
+type PromptType = "truth" | "dare";
+
+type PromptGameState = {
+  gameId: "truth-or-dare" | "spicy-zone";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  turnIdx: 0 | 1;
+  currentPrompt: { type: PromptType; text: string } | null;
+  roundsCompleted: number;
+  totalRounds: number;
+  winner: "win" | null;
+  startedAt: number;
+};
+
+// All prompts designed to work REMOTELY — partners on phones possibly
+// far apart. No "rub their foot" or "let them pick your outfit"
+// prompts. Everything here works through the app + phone + camera.
+
+const TOD_TRUTHS: string[] = [
+  "What's the most embarrassing song on your playlist right now?",
+  "What's one thing you've never told me but want to?",
+  "What's your most irrational fear?",
+  "What's a lie you've told me, even small, that you feel weird about?",
+  "What day of your life would you re-live if you could?",
+  "What's your guilty pleasure TV show?",
+  "What's something you did as a teenager you'd be horrified to admit now?",
+  "Who was your very first crush and what were they like?",
+  "What's the most childish thing you still do?",
+  "What would you do with a day of being invisible?",
+  "What's one habit of mine that secretly drives you crazy?",
+  "When was the last time you cried and why?",
+  "What's the worst gift you've ever received?",
+  "What belief did you used to hold that you've changed your mind about?",
+  "If you had to pick one superpower, what and why?",
+  "What's a toxic trait of yours you're actually working on?",
+  "What's the pettiest thing you've ever done in an argument with me?",
+  "What celebrity crush are you too embarrassed to admit?",
+  "What's the last thing you googled that you'd never say out loud?",
+  "What was the most awkward moment of our first date / first time meeting?",
+  "What's the dumbest thing you've ever spent money on?",
+  "What's a compliment you secretly hate receiving?",
+  "If you had 24 hours with no consequences, what would you actually do?",
+  "What's my most attractive non-physical trait — be specific?",
+  "What's one thing you wish you'd done by now?",
+  "What's your pettiest hill you will die on?",
+  "What's one thing you've exaggerated on a resume or in a story?",
+  "What's the meanest thing you've ever said to someone and regretted?",
+  "What's your weirdest recurring dream?",
+  "What's the moment you first realized you had feelings for me?",
+];
+
+const TOD_DARES: string[] = [
+  "Send me a selfie with the goofiest face you can make — right now.",
+  "Record a 10-second voice message of your best impression of me.",
+  "Text me three things you love about me in a row, no breaks.",
+  "Send me a picture of the weirdest thing within arm's reach.",
+  "Send me a voice message singing the chorus of the last song you listened to.",
+  "Send a 5-second video of your best dance move.",
+  "Write me a haiku about us in 60 seconds and send it.",
+  "Text me the last 3 emojis you used — don't edit the list.",
+  "Send me a screenshot of your phone's home screen right now.",
+  "Record a voice note whispering something you've never said out loud to me.",
+  "Send a selfie with your hair as chaotic as you can get it in 30 seconds.",
+  "Send a picture of the first thing you see when you look up.",
+  "Send a voice message of you laughing for 10 seconds straight.",
+  "Text me a compliment about me using only movie-trailer voice words (DRAMATIC LIKE THIS).",
+  "Send a selfie making your most convincing fake-cry face.",
+  "Type a 3-word love note and send it.",
+  "Send me a picture of something in your space that reminds you of me.",
+  "Talk only in questions in your next 3 texts to me.",
+  "Record a voice note describing my laugh in detail.",
+  "Send a selfie with your most pouty 'I miss you' face.",
+  "Do your best animal impression in a 5-second video and I have to guess.",
+  "Send a voice note of a whispered secret only I'd care about.",
+  "Text me the first thing that comes to mind when I say your favorite color.",
+  "Send a picture pretending to be doing something dramatic — you pick.",
+  "Send me your most flattering selfie right this second, no retakes.",
+  "Record a 10-second freestyle rap about our relationship.",
+  "Pick something in reach and use it as a microphone — send a video of you singing to me.",
+  "Send me a photo of the last thing you ate.",
+  "Voice note me reading the last text you sent me but in a sexy news-anchor voice.",
+  "Send me a selfie and caption it as if it's the movie poster for our life.",
+];
+
+const SPICY_TRUTHS: string[] = [
+  "What part of your partner do you find most attractive?",
+  "What's a compliment you wish your partner gave you more?",
+  "What's the most romantic thing you've ever done for someone?",
+  "What's one thing that always puts you in the mood?",
+  "What's your love language — and when did you last feel it from your partner?",
+  "What's a small thing your partner does that melts you?",
+  "What was the moment you first realized you were into them?",
+  "What's your idea of the perfect slow morning together?",
+  "What's a fantasy you've never told anyone?",
+  "What's the most spontaneous thing you'd want to do with your partner?",
+  "What song makes you think of them?",
+  "Where would you want to be kissed right now?",
+  "What's your partner's best kiss style?",
+  "What's the last text you read from them that gave you butterflies?",
+  "What's something romantic you've been wanting to ask for?",
+  "What's the sexiest thing that isn't physical?",
+  "When did you last feel truly wanted?",
+  "What outfit of theirs do you love the most?",
+  "What part of your relationship feels the most alive right now?",
+  "What's a memory with them you replay often?",
+  "What's one thing you'd change about a date night this week?",
+  "What's your partner's secret superpower in the relationship?",
+  "What's a turn-on that surprises you?",
+  "When did you first feel like 'yeah, this is my person'?",
+  "What's a compliment you've been holding back?",
+];
+
+const SPICY_DARES: string[] = [
+  "Give your partner a slow 30-second hug, no talking.",
+  "Whisper one thing you love about them into their ear.",
+  "Kiss your partner somewhere that's not their mouth.",
+  "Tell your partner the exact moment you fell for them.",
+  "Hold eye contact for 60 seconds without saying anything.",
+  "Massage your partner's shoulders for 60 seconds.",
+  "Slow-dance to one full song — no phones.",
+  "Write a 3-word love note and hand it to them.",
+  "Give your partner a compliment about a body part they're shy about.",
+  "Cuddle for a full 2 minutes with no distractions.",
+  "Send your partner one genuinely romantic text, right now.",
+  "Run your fingers through their hair for 30 seconds.",
+  "Kiss them the way you'd kiss them on a first date.",
+  "Hold their hand and tell them three things you're grateful for.",
+  "Read your partner's favorite poem or lyric out loud to them.",
+  "Pick one of your partner's features and describe it like a poet.",
+  "Give them your most honest 'what I wish we did more of' answer.",
+  "Share one fantasy date idea — big or small.",
+  "Light a candle (or turn the lights low) and sit quietly together for a minute.",
+  "Tell them the first thing you ever noticed about them physically.",
+  "Describe their laugh to them.",
+  "Give them one minute of undivided attention with no screens.",
+  "Rest your head on their chest for 30 seconds and just listen.",
+  "Ask 'what's one thing you want more of from me?' and actually listen.",
+  "Kiss their hand like it's the first time.",
+];
+
+function pickPrompt(
+  gameId: "truth-or-dare" | "spicy-zone",
+  type: PromptType,
+): string {
+  const bank =
+    gameId === "truth-or-dare"
+      ? type === "truth"
+        ? TOD_TRUTHS
+        : TOD_DARES
+      : type === "truth"
+        ? SPICY_TRUTHS
+        : SPICY_DARES;
+  return bank[Math.floor(Math.random() * bank.length)];
+}
+
+// --- Loving Quest (cooperative sequence) ---
+
+type LovingQuestState = {
+  gameId: "loving-quest";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  prompts: string[];
+  currentIdx: number;
+  doneFlags: [boolean, boolean];
+  winner: "done" | null;
+  startedAt: number;
+};
+
+const LOVING_QUEST_BANK: string[] = [
+  "Tell each other one thing you love about the other, out loud, right now.",
+  "Hold hands and take three slow breaths together.",
+  "Share one favorite memory of you two together.",
+  "Look each other in the eye for 30 seconds. No phones, no words.",
+  "Name one thing you're looking forward to doing together next.",
+  "Give each other one real, long hug — at least 20 seconds.",
+  "Say 'thank you for…' and finish it out loud.",
+  "Each pick one song that reminds you of the other. Play a bit of both.",
+  "Trade one small secret you've never told each other.",
+  "Make each other laugh — worst joke wins.",
+  "Describe the other person's smile in one sentence.",
+  "Share one thing you've been meaning to tell the other.",
+  "Each say one goal you want to work on this month, together or alone.",
+  "Kiss gently — just one — and keep going.",
+  "Agree on one thing you'll do together this weekend, big or small.",
+];
+
+function pickLovingQuestPrompts(n: number): string[] {
+  const shuffled = [...LOVING_QUEST_BANK].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
+// --- Word Chain ---
+
+type WordChainEntry = {
+  word: string;
+  playerIdx: 0 | 1;
+};
+
+type WordChainState = {
+  gameId: "word-chain";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  turnIdx: 0 | 1;
+  nextLetter: string;
+  history: WordChainEntry[];
+  winnerIdx: 0 | 1 | null;
+  startedAt: number;
+};
+
+function randomStartLetter(): string {
+  // Pick from common-starting letters — avoid X, Q, Z, Y which are brutal
+  // to start chains with.
+  const letters = "ABCDEFGHIJKLMNOPRSTUVW";
+  return letters[Math.floor(Math.random() * letters.length)];
+}
+
+// --- Trivia (competitive multiple choice race) ---
+
+type TriviaQuestion = {
+  id: string;
+  text: string;
+  choices: string[];
+  correctIdx: number;
+  category?: string;
+};
+
+type TriviaState = {
+  gameId: "trivia";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  questions: TriviaQuestion[];
+  currentIdx: number;
+  lockedOut: [boolean, boolean];
+  scores: [number, number];
+  winner: "win" | "draw" | null;
+  winnerIdx: 0 | 1 | null;
+  startedAt: number;
+};
+
+// 200 trivia questions across 14 categories so 10-question sessions
+// feel fresh for many games in a row. Rotation factor: 20 unique
+// 10-question sets before any question is even eligible to repeat.
+const TRIVIA_BANK: TriviaQuestion[] = [
+  // --- Science (35) ---
+  { id: "tv-001", text: "Which planet is known as the Red Planet?", choices: ["Venus", "Mars", "Jupiter", "Saturn"], correctIdx: 1, category: "Science" },
+  { id: "tv-002", text: "What element has the chemical symbol 'Au'?", choices: ["Silver", "Gold", "Aluminum", "Argon"], correctIdx: 1, category: "Science" },
+  { id: "tv-003", text: "What's the hardest natural substance?", choices: ["Quartz", "Diamond", "Steel", "Titanium"], correctIdx: 1, category: "Science" },
+  { id: "tv-004", text: "Which planet has the most moons?", choices: ["Jupiter", "Saturn", "Uranus", "Neptune"], correctIdx: 1, category: "Science" },
+  { id: "tv-005", text: "Which blood type is the universal donor?", choices: ["A+", "O-", "B+", "AB+"], correctIdx: 1, category: "Science" },
+  { id: "tv-006", text: "How many hearts does an octopus have?", choices: ["1", "2", "3", "4"], correctIdx: 2, category: "Science" },
+  { id: "tv-007", text: "What's the rarest blood type?", choices: ["O-", "AB-", "B+", "A-"], correctIdx: 1, category: "Science" },
+  { id: "tv-008", text: "How many bones are in the adult human body?", choices: ["198", "206", "212", "220"], correctIdx: 1, category: "Science" },
+  { id: "tv-009", text: "What's the chemical symbol for water?", choices: ["Wo", "H2O", "HO2", "H3O"], correctIdx: 1, category: "Science" },
+  { id: "tv-010", text: "What's the freezing point of water in Celsius?", choices: ["-10", "0", "10", "32"], correctIdx: 1, category: "Science" },
+  { id: "tv-011", text: "Which gas do plants absorb from the atmosphere?", choices: ["Oxygen", "Nitrogen", "Carbon dioxide", "Hydrogen"], correctIdx: 2, category: "Science" },
+  { id: "tv-012", text: "What's the speed of light in a vacuum (approx)?", choices: ["3×10^5 km/s", "3×10^8 m/s", "3×10^6 km/h", "3×10^4 km/s"], correctIdx: 1, category: "Science" },
+  { id: "tv-013", text: "What's the largest organ in the human body?", choices: ["Liver", "Brain", "Skin", "Lungs"], correctIdx: 2, category: "Science" },
+  { id: "tv-014", text: "Which planet is closest to the sun?", choices: ["Venus", "Mars", "Earth", "Mercury"], correctIdx: 3, category: "Science" },
+  { id: "tv-015", text: "How many chambers does the human heart have?", choices: ["2", "3", "4", "5"], correctIdx: 2, category: "Science" },
+  { id: "tv-016", text: "What's the smallest unit of matter?", choices: ["Molecule", "Atom", "Electron", "Quark"], correctIdx: 3, category: "Science" },
+  { id: "tv-017", text: "What's the pH of pure water?", choices: ["5", "7", "9", "14"], correctIdx: 1, category: "Science" },
+  { id: "tv-018", text: "Which vitamin does your body make from sunlight?", choices: ["A", "C", "D", "K"], correctIdx: 2, category: "Science" },
+  { id: "tv-019", text: "Which planet has a giant hexagonal storm at its north pole?", choices: ["Jupiter", "Saturn", "Uranus", "Neptune"], correctIdx: 1, category: "Science" },
+  { id: "tv-020", text: "What gas makes up most of Earth's atmosphere?", choices: ["Oxygen", "Carbon dioxide", "Nitrogen", "Argon"], correctIdx: 2, category: "Science" },
+  { id: "tv-021", text: "What's the nearest star to Earth (other than the Sun)?", choices: ["Sirius", "Proxima Centauri", "Alpha Centauri A", "Barnard's Star"], correctIdx: 1, category: "Science" },
+  { id: "tv-022", text: "How long does light from the Sun take to reach Earth?", choices: ["~8 seconds", "~8 minutes", "~8 hours", "~8 days"], correctIdx: 1, category: "Science" },
+  { id: "tv-023", text: "What's the largest type of animal cell?", choices: ["Nerve cell", "Muscle cell", "Egg cell", "Skin cell"], correctIdx: 2, category: "Science" },
+  { id: "tv-024", text: "What particles are found in an atom's nucleus?", choices: ["Only protons", "Only neutrons", "Protons + neutrons", "Electrons"], correctIdx: 2, category: "Science" },
+  { id: "tv-025", text: "What's the name of the galaxy Earth is in?", choices: ["Andromeda", "Triangulum", "Milky Way", "Sombrero"], correctIdx: 2, category: "Science" },
+  { id: "tv-026", text: "Which scientist proposed the laws of motion?", choices: ["Einstein", "Newton", "Galileo", "Kepler"], correctIdx: 1, category: "Science" },
+  { id: "tv-027", text: "Which bone is the longest in the human body?", choices: ["Spine", "Femur", "Tibia", "Humerus"], correctIdx: 1, category: "Science" },
+  { id: "tv-028", text: "What's the main component of the sun?", choices: ["Liquid lava", "Molten iron", "Hot hydrogen gas", "Rock and dust"], correctIdx: 2, category: "Science" },
+  { id: "tv-029", text: "What element is diamond made of?", choices: ["Silicon", "Carbon", "Quartz", "Calcium"], correctIdx: 1, category: "Science" },
+  { id: "tv-030", text: "What's the study of fossils called?", choices: ["Archaeology", "Geology", "Paleontology", "Anthropology"], correctIdx: 2, category: "Science" },
+  { id: "tv-031", text: "Which blood cell fights infection?", choices: ["Red", "White", "Platelet", "Plasma"], correctIdx: 1, category: "Science" },
+  { id: "tv-032", text: "What's DNA short for?", choices: ["Dihydro-nucleic acid", "Deoxyribonucleic acid", "Dinucleotide amine", "Di-oxyribo amine"], correctIdx: 1, category: "Science" },
+  { id: "tv-033", text: "What does the mitochondria do in a cell?", choices: ["Stores DNA", "Produces energy", "Filters waste", "Makes protein"], correctIdx: 1, category: "Science" },
+  { id: "tv-034", text: "How many teeth does an adult typically have?", choices: ["28", "30", "32", "36"], correctIdx: 2, category: "Science" },
+  { id: "tv-035", text: "What's the loudest animal on Earth?", choices: ["Lion", "Howler monkey", "Blue whale", "Sperm whale"], correctIdx: 3, category: "Science" },
+
+  // --- Geography (30) ---
+  { id: "tv-036", text: "What's the capital of Australia?", choices: ["Sydney", "Melbourne", "Canberra", "Perth"], correctIdx: 2, category: "Geography" },
+  { id: "tv-037", text: "What's the largest ocean on Earth?", choices: ["Atlantic", "Indian", "Arctic", "Pacific"], correctIdx: 3, category: "Geography" },
+  { id: "tv-038", text: "How many continents are there?", choices: ["5", "6", "7", "8"], correctIdx: 2, category: "Geography" },
+  { id: "tv-039", text: "What's the tallest mountain in the world?", choices: ["K2", "Everest", "Kangchenjunga", "Denali"], correctIdx: 1, category: "Geography" },
+  { id: "tv-040", text: "What's the currency of Japan?", choices: ["Won", "Yuan", "Yen", "Ringgit"], correctIdx: 2, category: "Geography" },
+  { id: "tv-041", text: "What's the longest river in the world?", choices: ["Amazon", "Nile", "Yangtze", "Mississippi"], correctIdx: 1, category: "Geography" },
+  { id: "tv-042", text: "What language has the most native speakers?", choices: ["English", "Spanish", "Mandarin", "Hindi"], correctIdx: 2, category: "Geography" },
+  { id: "tv-043", text: "What's the smallest country in the world?", choices: ["Monaco", "Vatican City", "Nauru", "San Marino"], correctIdx: 1, category: "Geography" },
+  { id: "tv-044", text: "Which country has the most time zones?", choices: ["USA", "Russia", "France", "China"], correctIdx: 2, category: "Geography" },
+  { id: "tv-045", text: "Which desert is the largest?", choices: ["Sahara", "Gobi", "Antarctic", "Arabian"], correctIdx: 2, category: "Geography" },
+  { id: "tv-046", text: "In which country is Machu Picchu?", choices: ["Mexico", "Peru", "Bolivia", "Ecuador"], correctIdx: 1, category: "Geography" },
+  { id: "tv-047", text: "What's the capital of Canada?", choices: ["Toronto", "Vancouver", "Ottawa", "Montreal"], correctIdx: 2, category: "Geography" },
+  { id: "tv-048", text: "Which river runs through London?", choices: ["Seine", "Thames", "Rhine", "Danube"], correctIdx: 1, category: "Geography" },
+  { id: "tv-049", text: "How many states in the USA?", choices: ["48", "49", "50", "52"], correctIdx: 2, category: "Geography" },
+  { id: "tv-050", text: "What's the tallest waterfall in the world?", choices: ["Niagara", "Angel Falls", "Victoria", "Iguazu"], correctIdx: 1, category: "Geography" },
+  { id: "tv-051", text: "Which country has a maple leaf on its flag?", choices: ["USA", "UK", "Canada", "Australia"], correctIdx: 2, category: "Geography" },
+  { id: "tv-052", text: "What's the largest country by land area?", choices: ["Canada", "USA", "Russia", "China"], correctIdx: 2, category: "Geography" },
+  { id: "tv-053", text: "What's the most populous country in the world?", choices: ["China", "India", "USA", "Indonesia"], correctIdx: 1, category: "Geography" },
+  { id: "tv-054", text: "Which ocean is between Africa and Australia?", choices: ["Pacific", "Atlantic", "Indian", "Southern"], correctIdx: 2, category: "Geography" },
+  { id: "tv-055", text: "What's the capital of Spain?", choices: ["Barcelona", "Madrid", "Seville", "Valencia"], correctIdx: 1, category: "Geography" },
+  { id: "tv-056", text: "What's the capital of Egypt?", choices: ["Alexandria", "Cairo", "Giza", "Luxor"], correctIdx: 1, category: "Geography" },
+  { id: "tv-057", text: "Which US state is the largest by area?", choices: ["Texas", "Alaska", "California", "Montana"], correctIdx: 1, category: "Geography" },
+  { id: "tv-058", text: "Which European country is known for fjords?", choices: ["Germany", "Norway", "Denmark", "Iceland"], correctIdx: 1, category: "Geography" },
+  { id: "tv-059", text: "What's the deepest lake in the world?", choices: ["Superior", "Tanganyika", "Baikal", "Victoria"], correctIdx: 2, category: "Geography" },
+  { id: "tv-060", text: "Which country is home to the Great Barrier Reef?", choices: ["Indonesia", "Australia", "Philippines", "Fiji"], correctIdx: 1, category: "Geography" },
+  { id: "tv-061", text: "What's the capital of Germany?", choices: ["Munich", "Hamburg", "Berlin", "Frankfurt"], correctIdx: 2, category: "Geography" },
+  { id: "tv-062", text: "Which continent is driest on average?", choices: ["Africa", "Australia", "Antarctica", "Asia"], correctIdx: 2, category: "Geography" },
+  { id: "tv-063", text: "Which country has no national capital city?", choices: ["Nauru", "Tuvalu", "Monaco", "All of those"], correctIdx: 3, category: "Geography" },
+  { id: "tv-064", text: "The Panama Canal connects which two oceans?", choices: ["Pacific and Atlantic", "Atlantic and Indian", "Pacific and Indian", "Arctic and Atlantic"], correctIdx: 0, category: "Geography" },
+  { id: "tv-065", text: "Which US city is nicknamed 'The Windy City'?", choices: ["Boston", "New York", "Chicago", "Seattle"], correctIdx: 2, category: "Geography" },
+
+  // --- History (20) ---
+  { id: "tv-066", text: "In what year did World War II end?", choices: ["1943", "1944", "1945", "1946"], correctIdx: 2, category: "History" },
+  { id: "tv-067", text: "What year did the Berlin Wall fall?", choices: ["1987", "1988", "1989", "1990"], correctIdx: 2, category: "History" },
+  { id: "tv-068", text: "Who invented the telephone?", choices: ["Edison", "Tesla", "Bell", "Marconi"], correctIdx: 2, category: "History" },
+  { id: "tv-069", text: "What year did humans first land on the moon?", choices: ["1967", "1968", "1969", "1970"], correctIdx: 2, category: "History" },
+  { id: "tv-070", text: "Who was the first US president?", choices: ["Jefferson", "Adams", "Washington", "Franklin"], correctIdx: 2, category: "History" },
+  { id: "tv-071", text: "Which empire was led by Julius Caesar?", choices: ["Greek", "Persian", "Roman", "Egyptian"], correctIdx: 2, category: "History" },
+  { id: "tv-072", text: "What ancient wonder was in Alexandria?", choices: ["Hanging Gardens", "Colossus", "Lighthouse", "Pyramid"], correctIdx: 2, category: "History" },
+  { id: "tv-073", text: "In which year did the Titanic sink?", choices: ["1910", "1911", "1912", "1913"], correctIdx: 2, category: "History" },
+  { id: "tv-074", text: "Who painted the Sistine Chapel ceiling?", choices: ["Raphael", "Da Vinci", "Michelangelo", "Donatello"], correctIdx: 2, category: "History" },
+  { id: "tv-075", text: "Which civilization built Machu Picchu?", choices: ["Aztec", "Maya", "Inca", "Olmec"], correctIdx: 2, category: "History" },
+  { id: "tv-076", text: "In what year did WWI begin?", choices: ["1912", "1914", "1916", "1918"], correctIdx: 1, category: "History" },
+  { id: "tv-077", text: "Who was the first woman to win a Nobel Prize?", choices: ["Rosalind Franklin", "Marie Curie", "Ada Lovelace", "Florence Nightingale"], correctIdx: 1, category: "History" },
+  { id: "tv-078", text: "What year was the Declaration of Independence signed?", choices: ["1774", "1775", "1776", "1789"], correctIdx: 2, category: "History" },
+  { id: "tv-079", text: "Who was the longest-reigning British monarch?", choices: ["Victoria", "Elizabeth II", "George III", "Henry VIII"], correctIdx: 1, category: "History" },
+  { id: "tv-080", text: "In what year did the USSR dissolve?", choices: ["1989", "1990", "1991", "1992"], correctIdx: 2, category: "History" },
+  { id: "tv-081", text: "Who wrote the '95 Theses'?", choices: ["Calvin", "Luther", "Zwingli", "Knox"], correctIdx: 1, category: "History" },
+  { id: "tv-082", text: "Which was the first country to give women the vote?", choices: ["USA", "UK", "New Zealand", "Sweden"], correctIdx: 2, category: "History" },
+  { id: "tv-083", text: "Who led India's non-violent independence movement?", choices: ["Nehru", "Gandhi", "Tagore", "Bose"], correctIdx: 1, category: "History" },
+  { id: "tv-084", text: "What year did the Chernobyl disaster happen?", choices: ["1984", "1985", "1986", "1987"], correctIdx: 2, category: "History" },
+  { id: "tv-085", text: "Which empire was known for its Great Wall?", choices: ["Mongol", "Japanese", "Chinese", "Korean"], correctIdx: 2, category: "History" },
+
+  // --- Literature (15) ---
+  { id: "tv-086", text: "Who wrote 'Romeo and Juliet'?", choices: ["Dickens", "Shakespeare", "Chaucer", "Austen"], correctIdx: 1, category: "Literature" },
+  { id: "tv-087", text: "Who wrote 'Harry Potter'?", choices: ["Tolkien", "Rowling", "Pullman", "Lewis"], correctIdx: 1, category: "Literature" },
+  { id: "tv-088", text: "Who wrote '1984'?", choices: ["Huxley", "Orwell", "Bradbury", "Atwood"], correctIdx: 1, category: "Literature" },
+  { id: "tv-089", text: "Who wrote 'Pride and Prejudice'?", choices: ["Brontë", "Austen", "Alcott", "Eliot"], correctIdx: 1, category: "Literature" },
+  { id: "tv-090", text: "In which novel would you meet Atticus Finch?", choices: ["Gatsby", "To Kill a Mockingbird", "Catcher in the Rye", "Of Mice and Men"], correctIdx: 1, category: "Literature" },
+  { id: "tv-091", text: "Who wrote 'The Great Gatsby'?", choices: ["Hemingway", "Fitzgerald", "Faulkner", "Salinger"], correctIdx: 1, category: "Literature" },
+  { id: "tv-092", text: "Who wrote the 'A Song of Ice and Fire' series?", choices: ["Tolkien", "Sanderson", "Martin", "Jordan"], correctIdx: 2, category: "Literature" },
+  { id: "tv-093", text: "Which Shakespeare play features the line 'To be or not to be'?", choices: ["Macbeth", "Hamlet", "Othello", "King Lear"], correctIdx: 1, category: "Literature" },
+  { id: "tv-094", text: "Who wrote 'The Odyssey'?", choices: ["Virgil", "Homer", "Plato", "Ovid"], correctIdx: 1, category: "Literature" },
+  { id: "tv-095", text: "Which Dickens novel features Ebenezer Scrooge?", choices: ["Oliver Twist", "A Christmas Carol", "Great Expectations", "Hard Times"], correctIdx: 1, category: "Literature" },
+  { id: "tv-096", text: "Who wrote 'Moby-Dick'?", choices: ["Thoreau", "Melville", "Hawthorne", "Poe"], correctIdx: 1, category: "Literature" },
+  { id: "tv-097", text: "In 'The Hobbit', what is Bilbo's family name?", choices: ["Took", "Baggins", "Gamgee", "Brandybuck"], correctIdx: 1, category: "Literature" },
+  { id: "tv-098", text: "Who wrote 'Frankenstein'?", choices: ["Mary Shelley", "Bram Stoker", "Jane Austen", "Emily Brontë"], correctIdx: 0, category: "Literature" },
+  { id: "tv-099", text: "What's the name of the hobbit who destroys the One Ring?", choices: ["Bilbo", "Sam", "Frodo", "Merry"], correctIdx: 2, category: "Literature" },
+  { id: "tv-100", text: "Who wrote 'The Adventures of Huckleberry Finn'?", choices: ["Dickens", "Twain", "London", "Steinbeck"], correctIdx: 1, category: "Literature" },
+
+  // --- Art (10) ---
+  { id: "tv-101", text: "Who painted the Mona Lisa?", choices: ["Michelangelo", "Leonardo da Vinci", "Raphael", "Donatello"], correctIdx: 1, category: "Art" },
+  { id: "tv-102", text: "Who painted 'Starry Night'?", choices: ["Monet", "Van Gogh", "Picasso", "Dalí"], correctIdx: 1, category: "Art" },
+  { id: "tv-103", text: "Who cut off his own ear?", choices: ["Van Gogh", "Picasso", "Dalí", "Rembrandt"], correctIdx: 0, category: "Art" },
+  { id: "tv-104", text: "Which movement is Picasso associated with?", choices: ["Surrealism", "Cubism", "Impressionism", "Baroque"], correctIdx: 1, category: "Art" },
+  { id: "tv-105", text: "Who painted 'The Persistence of Memory' (melting clocks)?", choices: ["Picasso", "Miró", "Dalí", "Chagall"], correctIdx: 2, category: "Art" },
+  { id: "tv-106", text: "Which color is made by mixing red and blue?", choices: ["Orange", "Green", "Purple", "Pink"], correctIdx: 2, category: "Art" },
+  { id: "tv-107", text: "Where is the Louvre?", choices: ["London", "Rome", "Paris", "Madrid"], correctIdx: 2, category: "Art" },
+  { id: "tv-108", text: "What art movement came right after Impressionism?", choices: ["Romanticism", "Post-Impressionism", "Realism", "Renaissance"], correctIdx: 1, category: "Art" },
+  { id: "tv-109", text: "Who painted 'The Scream'?", choices: ["Munch", "Kahlo", "Klee", "Ernst"], correctIdx: 0, category: "Art" },
+  { id: "tv-110", text: "Banksy is known for what type of art?", choices: ["Oil painting", "Street / stencil", "Sculpture", "Digital"], correctIdx: 1, category: "Art" },
+
+  // --- Movies & TV (20) ---
+  { id: "tv-111", text: "Who directed 'Jurassic Park'?", choices: ["George Lucas", "James Cameron", "Steven Spielberg", "Ridley Scott"], correctIdx: 2, category: "Movies" },
+  { id: "tv-112", text: "Which movie won Best Picture in 2020?", choices: ["1917", "Parasite", "Joker", "Ford v Ferrari"], correctIdx: 1, category: "Movies" },
+  { id: "tv-113", text: "Which actor played Iron Man?", choices: ["Chris Evans", "Robert Downey Jr.", "Mark Ruffalo", "Chris Hemsworth"], correctIdx: 1, category: "Movies" },
+  { id: "tv-114", text: "Who directed 'Pulp Fiction'?", choices: ["Scorsese", "Coppola", "Tarantino", "Nolan"], correctIdx: 2, category: "Movies" },
+  { id: "tv-115", text: "What's the name of the kingdom in 'Frozen'?", choices: ["Arendelle", "Agrabah", "Corona", "Atlantica"], correctIdx: 0, category: "Movies" },
+  { id: "tv-116", text: "Who directed 'Inception'?", choices: ["Nolan", "Fincher", "Villeneuve", "Anderson"], correctIdx: 0, category: "Movies" },
+  { id: "tv-117", text: "What's the highest-grossing Avatar-franchise film?", choices: ["Avatar", "Avatar: The Way of Water", "Avatar 3", "Avatar 2D re-release"], correctIdx: 0, category: "Movies" },
+  { id: "tv-118", text: "In 'The Matrix', what color pill represents reality?", choices: ["Red", "Blue", "Green", "White"], correctIdx: 0, category: "Movies" },
+  { id: "tv-119", text: "Which show features the Iron Throne?", choices: ["Vikings", "Game of Thrones", "The Witcher", "House of the Dragon"], correctIdx: 1, category: "Movies" },
+  { id: "tv-120", text: "Who voices Woody in Toy Story?", choices: ["Tim Allen", "Tom Hanks", "Billy Crystal", "John Goodman"], correctIdx: 1, category: "Movies" },
+  { id: "tv-121", text: "What's the name of the coffee shop in Friends?", choices: ["Central Perk", "The Grind", "Perk & Cup", "Java Joe's"], correctIdx: 0, category: "Movies" },
+  { id: "tv-122", text: "Which movie features Forrest Gump?", choices: ["Cast Away", "Forrest Gump", "The Green Mile", "Philadelphia"], correctIdx: 1, category: "Movies" },
+  { id: "tv-123", text: "Who directed 'Titanic' and the Avatar series?", choices: ["Nolan", "Cameron", "Scott", "Spielberg"], correctIdx: 1, category: "Movies" },
+  { id: "tv-124", text: "What is Dumbledore's first name?", choices: ["Elias", "Albus", "Aberforth", "Cornelius"], correctIdx: 1, category: "Movies" },
+  { id: "tv-125", text: "In 'Stranger Things', what alternate dimension is featured?", choices: ["The Void", "The Upside Down", "The Other Side", "The Rift"], correctIdx: 1, category: "Movies" },
+  { id: "tv-126", text: "Which superhero is from Krypton?", choices: ["Batman", "Superman", "Aquaman", "Flash"], correctIdx: 1, category: "Movies" },
+  { id: "tv-127", text: "Who played Jack in 'Titanic'?", choices: ["Brad Pitt", "Leonardo DiCaprio", "Matt Damon", "Ben Affleck"], correctIdx: 1, category: "Movies" },
+  { id: "tv-128", text: "In 'Breaking Bad', what's Walter's alias?", choices: ["Heisenberg", "Big Bang", "Capers", "The Count"], correctIdx: 0, category: "Movies" },
+  { id: "tv-129", text: "Which Disney movie features Simba?", choices: ["Lion King", "Tarzan", "Madagascar", "Jungle Book"], correctIdx: 0, category: "Movies" },
+  { id: "tv-130", text: "Who directed 'The Godfather'?", choices: ["Scorsese", "Coppola", "Lucas", "Kubrick"], correctIdx: 1, category: "Movies" },
+
+  // --- Music (15) ---
+  { id: "tv-131", text: "Which instrument has 88 keys?", choices: ["Organ", "Piano", "Harpsichord", "Accordion"], correctIdx: 1, category: "Music" },
+  { id: "tv-132", text: "Which band released 'Abbey Road'?", choices: ["Rolling Stones", "Beatles", "Led Zeppelin", "Pink Floyd"], correctIdx: 1, category: "Music" },
+  { id: "tv-133", text: "Who sang 'Bad Guy' (2019)?", choices: ["Billie Eilish", "Ariana Grande", "Olivia Rodrigo", "Dua Lipa"], correctIdx: 0, category: "Music" },
+  { id: "tv-134", text: "How many strings does a standard guitar have?", choices: ["4", "5", "6", "7"], correctIdx: 2, category: "Music" },
+  { id: "tv-135", text: "Which composer wrote the 'Ode to Joy'?", choices: ["Mozart", "Beethoven", "Bach", "Schubert"], correctIdx: 1, category: "Music" },
+  { id: "tv-136", text: "What's the main instrument in a jazz ensemble traditionally?", choices: ["Violin", "Saxophone", "Flute", "Piano"], correctIdx: 1, category: "Music" },
+  { id: "tv-137", text: "Which boy band had 'Bye Bye Bye'?", choices: ["Backstreet Boys", "98 Degrees", "*NSYNC", "Boyz II Men"], correctIdx: 2, category: "Music" },
+  { id: "tv-138", text: "Who is the 'King of Pop'?", choices: ["Elvis", "Prince", "Michael Jackson", "Bowie"], correctIdx: 2, category: "Music" },
+  { id: "tv-139", text: "Which artist released 'Lemonade' (2016)?", choices: ["Rihanna", "Beyoncé", "Adele", "Alicia Keys"], correctIdx: 1, category: "Music" },
+  { id: "tv-140", text: "What genre is Bob Marley known for?", choices: ["Hip-hop", "Reggae", "Blues", "Country"], correctIdx: 1, category: "Music" },
+  { id: "tv-141", text: "Which of these is a string instrument?", choices: ["Trumpet", "Harmonica", "Cello", "Xylophone"], correctIdx: 2, category: "Music" },
+  { id: "tv-142", text: "Who is the lead singer of Queen?", choices: ["John Deacon", "Freddie Mercury", "Brian May", "Roger Taylor"], correctIdx: 1, category: "Music" },
+  { id: "tv-143", text: "Which rapper released 'The Blueprint' (2001)?", choices: ["Jay-Z", "Nas", "Eminem", "50 Cent"], correctIdx: 0, category: "Music" },
+  { id: "tv-144", text: "Which instrument does Yo-Yo Ma play?", choices: ["Violin", "Cello", "Viola", "Bass"], correctIdx: 1, category: "Music" },
+  { id: "tv-145", text: "'Shape of You' is by which artist?", choices: ["Justin Bieber", "Ed Sheeran", "The Weeknd", "Shawn Mendes"], correctIdx: 1, category: "Music" },
+
+  // --- Food (10) ---
+  { id: "tv-146", text: "Which country invented pizza?", choices: ["France", "Greece", "Italy", "Spain"], correctIdx: 2, category: "Food" },
+  { id: "tv-147", text: "What's the main ingredient in guacamole?", choices: ["Tomato", "Avocado", "Lime", "Onion"], correctIdx: 1, category: "Food" },
+  { id: "tv-148", text: "What's the world's most consumed beverage (besides water)?", choices: ["Coffee", "Tea", "Beer", "Milk"], correctIdx: 1, category: "Food" },
+  { id: "tv-149", text: "Which cheese is traditionally used on pizza Margherita?", choices: ["Cheddar", "Mozzarella", "Provolone", "Feta"], correctIdx: 1, category: "Food" },
+  { id: "tv-150", text: "What's the primary grain used in sushi rice?", choices: ["Basmati", "Jasmine", "Short-grain", "Long-grain"], correctIdx: 2, category: "Food" },
+  { id: "tv-151", text: "What spice is the world's most expensive by weight?", choices: ["Vanilla", "Saffron", "Cardamom", "Truffle"], correctIdx: 1, category: "Food" },
+  { id: "tv-152", text: "Which fruit has seeds on the outside?", choices: ["Blueberry", "Strawberry", "Grape", "Cherry"], correctIdx: 1, category: "Food" },
+  { id: "tv-153", text: "What's the main ingredient in hummus?", choices: ["Chickpeas", "White beans", "Lentils", "Peas"], correctIdx: 0, category: "Food" },
+  { id: "tv-154", text: "Which cuisine uses a tandoor oven?", choices: ["Thai", "Chinese", "Indian", "Japanese"], correctIdx: 2, category: "Food" },
+  { id: "tv-155", text: "Which nut is used in pesto traditionally?", choices: ["Almond", "Walnut", "Pine nut", "Cashew"], correctIdx: 2, category: "Food" },
+
+  // --- Sports (10) ---
+  { id: "tv-156", text: "How many players on a soccer team on the field?", choices: ["9", "10", "11", "12"], correctIdx: 2, category: "Sports" },
+  { id: "tv-157", text: "Which country hosts Wimbledon?", choices: ["USA", "France", "England", "Australia"], correctIdx: 2, category: "Sports" },
+  { id: "tv-158", text: "How many rings on the Olympic flag?", choices: ["4", "5", "6", "7"], correctIdx: 1, category: "Sports" },
+  { id: "tv-159", text: "In which sport do you 'love' a score of zero?", choices: ["Golf", "Tennis", "Cricket", "Baseball"], correctIdx: 1, category: "Sports" },
+  { id: "tv-160", text: "How many players are on an NBA basketball team on the court per side?", choices: ["4", "5", "6", "7"], correctIdx: 1, category: "Sports" },
+  { id: "tv-161", text: "Which boxer called himself 'The Greatest'?", choices: ["Tyson", "Ali", "Foreman", "Frazier"], correctIdx: 1, category: "Sports" },
+  { id: "tv-162", text: "What does NFL stand for?", choices: ["National Football League", "National Fan League", "North Football League", "New Football Legacy"], correctIdx: 0, category: "Sports" },
+  { id: "tv-163", text: "Which country won the most Summer Olympic medals historically?", choices: ["USSR/Russia", "USA", "China", "UK"], correctIdx: 1, category: "Sports" },
+  { id: "tv-164", text: "In golf, what's one stroke under par called?", choices: ["Eagle", "Birdie", "Bogey", "Albatross"], correctIdx: 1, category: "Sports" },
+  { id: "tv-165", text: "Which sport uses a 'shuttlecock'?", choices: ["Tennis", "Badminton", "Squash", "Table tennis"], correctIdx: 1, category: "Sports" },
+
+  // --- Tech (10) ---
+  { id: "tv-166", text: "What year did the first iPhone release?", choices: ["2005", "2006", "2007", "2008"], correctIdx: 2, category: "Tech" },
+  { id: "tv-167", text: "What does HTML stand for?", choices: ["HyperText Markup Language", "Home Text Markup Language", "HyperTransfer Meta Language", "High Text Multiplex Language"], correctIdx: 0, category: "Tech" },
+  { id: "tv-168", text: "Who co-founded Apple with Steve Jobs?", choices: ["Wozniak", "Gates", "Allen", "Cook"], correctIdx: 0, category: "Tech" },
+  { id: "tv-169", text: "What does CPU stand for?", choices: ["Central Processing Unit", "Computer Processing Unit", "Core Processor Unit", "Control Processing Unit"], correctIdx: 0, category: "Tech" },
+  { id: "tv-170", text: "Which company makes the Windows OS?", choices: ["Apple", "Google", "Microsoft", "IBM"], correctIdx: 2, category: "Tech" },
+  { id: "tv-171", text: "What year did Facebook launch?", choices: ["2003", "2004", "2005", "2006"], correctIdx: 1, category: "Tech" },
+  { id: "tv-172", text: "Who is the CEO of Tesla (as of 2024)?", choices: ["Elon Musk", "Tim Cook", "Jeff Bezos", "Sundar Pichai"], correctIdx: 0, category: "Tech" },
+  { id: "tv-173", text: "What does 'URL' stand for?", choices: ["Uniform Resource Locator", "Universal Reserved Link", "Uniform Resource Link", "Universal Reference Locator"], correctIdx: 0, category: "Tech" },
+  { id: "tv-174", text: "What was the first mass-produced personal computer by IBM?", choices: ["IBM PC", "Altair", "Apple I", "Commodore 64"], correctIdx: 0, category: "Tech" },
+  { id: "tv-175", text: "Which language is React written in?", choices: ["Python", "Ruby", "JavaScript", "TypeScript"], correctIdx: 2, category: "Tech" },
+
+  // --- Nature (10) ---
+  { id: "tv-176", text: "What's the fastest land animal?", choices: ["Lion", "Cheetah", "Pronghorn", "Ostrich"], correctIdx: 1, category: "Nature" },
+  { id: "tv-177", text: "What's the largest mammal?", choices: ["Elephant", "Blue whale", "Giraffe", "Orca"], correctIdx: 1, category: "Nature" },
+  { id: "tv-178", text: "What animal is known as the 'Ship of the Desert'?", choices: ["Horse", "Camel", "Donkey", "Llama"], correctIdx: 1, category: "Nature" },
+  { id: "tv-179", text: "Which bird is the largest?", choices: ["Eagle", "Ostrich", "Condor", "Albatross"], correctIdx: 1, category: "Nature" },
+  { id: "tv-180", text: "How many legs does a spider have?", choices: ["6", "8", "10", "12"], correctIdx: 1, category: "Nature" },
+  { id: "tv-181", text: "What's a baby kangaroo called?", choices: ["Kit", "Joey", "Cub", "Pup"], correctIdx: 1, category: "Nature" },
+  { id: "tv-182", text: "Which mammal can fly?", choices: ["Flying squirrel", "Bat", "Sugar glider", "Colugo"], correctIdx: 1, category: "Nature" },
+  { id: "tv-183", text: "Which tree produces acorns?", choices: ["Maple", "Oak", "Pine", "Birch"], correctIdx: 1, category: "Nature" },
+  { id: "tv-184", text: "Which bird can mimic human speech?", choices: ["Sparrow", "Parrot", "Pigeon", "Finch"], correctIdx: 1, category: "Nature" },
+  { id: "tv-185", text: "What color is octopus blood?", choices: ["Red", "Green", "Blue", "Clear"], correctIdx: 2, category: "Nature" },
+
+  // --- Math / Misc (15) ---
+  { id: "tv-186", text: "How many sides does a hexagon have?", choices: ["5", "6", "7", "8"], correctIdx: 1, category: "Math" },
+  { id: "tv-187", text: "Which is the smallest prime number?", choices: ["0", "1", "2", "3"], correctIdx: 2, category: "Math" },
+  { id: "tv-188", text: "What's the value of pi to 2 decimal places?", choices: ["3.12", "3.14", "3.16", "3.18"], correctIdx: 1, category: "Math" },
+  { id: "tv-189", text: "What's 12 × 12?", choices: ["124", "144", "154", "148"], correctIdx: 1, category: "Math" },
+  { id: "tv-190", text: "What's the square root of 144?", choices: ["10", "11", "12", "14"], correctIdx: 2, category: "Math" },
+  { id: "tv-191", text: "How many degrees in a triangle's interior angles?", choices: ["90", "180", "270", "360"], correctIdx: 1, category: "Math" },
+  { id: "tv-192", text: "Which Greek god is king of the gods?", choices: ["Poseidon", "Hades", "Apollo", "Zeus"], correctIdx: 3, category: "Mythology" },
+  { id: "tv-193", text: "Which Greek god is god of the sea?", choices: ["Zeus", "Ares", "Poseidon", "Apollo"], correctIdx: 2, category: "Mythology" },
+  { id: "tv-194", text: "Who is Thor's hammer named?", choices: ["Gungnir", "Stormbreaker", "Mjölnir", "Fenrir"], correctIdx: 2, category: "Mythology" },
+  { id: "tv-195", text: "In Greek myth, who opened the box of evils?", choices: ["Athena", "Pandora", "Persephone", "Hera"], correctIdx: 1, category: "Mythology" },
+  { id: "tv-196", text: "Which number is considered unlucky in Western culture?", choices: ["7", "11", "13", "21"], correctIdx: 2, category: "Misc" },
+  { id: "tv-197", text: "What color are London taxis traditionally?", choices: ["Yellow", "Black", "Red", "Green"], correctIdx: 1, category: "Misc" },
+  { id: "tv-198", text: "What color is a ripe banana's skin right before brown?", choices: ["Green", "Yellow", "Orange", "Red"], correctIdx: 1, category: "Misc" },
+  { id: "tv-199", text: "In what game do you try to get a Yahtzee?", choices: ["Cards", "Dice", "Dominoes", "Board"], correctIdx: 1, category: "Misc" },
+  { id: "tv-200", text: "What's the only even prime number?", choices: ["0", "2", "4", "6"], correctIdx: 1, category: "Math" },
+];
+
+function pickTriviaQuestions(n: number): TriviaQuestion[] {
+  const shuffled = [...TRIVIA_BANK].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
+// --- Love Trivia (cooperative couples game) ---
+
+type LoveTriviaQuestion = {
+  id: string;
+  text: string;
+  choices: string[];
+};
+
+type LoveTriviaState = {
+  gameId: "love-trivia";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  phase: "setup" | "game" | "done";
+  questions: LoveTriviaQuestion[];
+  setupPredictions: [(number | null)[], (number | null)[]];
+  gameAnswers: [(number | null)[], (number | null)[]];
+  currentIdx: number;
+  scores: [number, number];
+  winner: "done" | null;
+  startedAt: number;
+};
+
+// 150 couples-trivia questions. Pool chosen so a 10-question session
+// is rotationally unique for 15 sessions before repeats start. Each
+// question has 4 choices and no "right" answer — the server only
+// knows that partner-answer matching scores points.
+const LOVE_TRIVIA_BANK: LoveTriviaQuestion[] = [
+  {
+    id: "lt-01",
+    text: "The perfect date night is...",
+    choices: [
+      "Cozy night in with takeout",
+      "Fancy dinner out",
+      "Adventurous outdoor thing",
+      "Concert or event",
+    ],
+  },
+  {
+    id: "lt-02",
+    text: "Your partner's ideal vacation is...",
+    choices: ["Tropical beach", "Mountain cabin", "Big city trip", "Road trip"],
+  },
+  {
+    id: "lt-03",
+    text: "Their go-to comfort food is...",
+    choices: ["Pizza", "Pasta", "Mac & cheese", "Tacos"],
+  },
+  {
+    id: "lt-04",
+    text: "Their favorite season is...",
+    choices: ["Spring", "Summer", "Fall", "Winter"],
+  },
+  {
+    id: "lt-05",
+    text: "Their love language is mostly...",
+    choices: [
+      "Words of affirmation",
+      "Physical touch",
+      "Acts of service",
+      "Quality time",
+    ],
+  },
+  {
+    id: "lt-06",
+    text: "On a lazy Sunday they'd rather...",
+    choices: [
+      "Sleep in and cuddle",
+      "Brunch somewhere",
+      "Long walk or hike",
+      "Binge a show",
+    ],
+  },
+  {
+    id: "lt-07",
+    text: "Their favorite way to relax is...",
+    choices: ["Reading", "Video games", "Music", "A long bath"],
+  },
+  {
+    id: "lt-08",
+    text: "The snack they always grab is...",
+    choices: ["Chips", "Chocolate", "Fruit", "Popcorn"],
+  },
+  {
+    id: "lt-09",
+    text: "Their morning starts with...",
+    choices: ["Coffee", "Tea", "Water", "Nothing — just vibes"],
+  },
+  {
+    id: "lt-10",
+    text: "Their worst nightmare social event is...",
+    choices: [
+      "A loud club",
+      "A formal work party",
+      "A big family dinner",
+      "A small talk networking thing",
+    ],
+  },
+  {
+    id: "lt-11",
+    text: "When stressed, they mostly want...",
+    choices: [
+      "To be held",
+      "Space to themselves",
+      "To vent out loud",
+      "A distraction",
+    ],
+  },
+  {
+    id: "lt-12",
+    text: "Their favorite kind of movie is...",
+    choices: ["Action / thriller", "Rom-com", "Horror", "Sci-fi / fantasy"],
+  },
+  {
+    id: "lt-13",
+    text: "If they could only drink one beverage forever...",
+    choices: ["Coffee", "Beer", "Wine", "Diet soda"],
+  },
+  {
+    id: "lt-14",
+    text: "The chore they hate the most is...",
+    choices: ["Dishes", "Laundry", "Vacuuming", "Taking out trash"],
+  },
+  {
+    id: "lt-15",
+    text: "Their dream pet would be...",
+    choices: ["Dog", "Cat", "Something exotic", "No pets ever"],
+  },
+  {
+    id: "lt-16",
+    text: "The compliment they most want to hear is...",
+    choices: [
+      "You're so funny",
+      "You're so smart",
+      "You look amazing",
+      "I love how kind you are",
+    ],
+  },
+  {
+    id: "lt-17",
+    text: "Their guilty-pleasure song is probably...",
+    choices: [
+      "Early 2000s pop",
+      "Throwback country",
+      "A boy band classic",
+      "A cheesy love ballad",
+    ],
+  },
+  {
+    id: "lt-18",
+    text: "Their dream job as a kid was...",
+    choices: ["Astronaut", "Artist", "Doctor / vet", "Athlete"],
+  },
+  {
+    id: "lt-19",
+    text: "At a party they'd usually be...",
+    choices: [
+      "Center of the conversation",
+      "Quiet in a corner",
+      "Helping the host",
+      "Leaving early",
+    ],
+  },
+  {
+    id: "lt-20",
+    text: "Their phone screen time is mostly...",
+    choices: [
+      "Social media",
+      "Games",
+      "Texting friends",
+      "Work / productivity",
+    ],
+  },
+  {
+    id: "lt-21",
+    text: "Their dream breakfast is...",
+    choices: ["Pancakes", "Eggs and bacon", "Avocado toast", "Just coffee"],
+  },
+  {
+    id: "lt-22",
+    text: "The trait they love most in themselves is...",
+    choices: ["Humor", "Loyalty", "Work ethic", "Kindness"],
+  },
+  {
+    id: "lt-23",
+    text: "Their favorite smell is...",
+    choices: [
+      "Fresh laundry",
+      "Campfire",
+      "Baked goods",
+      "Ocean / salt air",
+    ],
+  },
+  {
+    id: "lt-24",
+    text: "The superpower they'd pick is...",
+    choices: ["Flying", "Teleporting", "Reading minds", "Time travel"],
+  },
+  {
+    id: "lt-25",
+    text: "Their ideal birthday gift is...",
+    choices: [
+      "Something handmade",
+      "Experience / trip",
+      "Tech or gadget",
+      "Quiet time with you",
+    ],
+  },
+  {
+    id: "lt-26",
+    text: "They're most likely to cry at...",
+    choices: [
+      "A sad movie",
+      "Animal videos",
+      "A song that hits",
+      "They don't really cry",
+    ],
+  },
+  {
+    id: "lt-27",
+    text: "The dance move they'd pull out is...",
+    choices: ["The sprinkler", "Awkward shuffle", "Confident slow dance", "Full-body commit"],
+  },
+  {
+    id: "lt-28",
+    text: "Their ideal pace through a museum is...",
+    choices: [
+      "Read every plaque",
+      "Skim the highlights",
+      "Gift shop first",
+      "Nope, not a museum person",
+    ],
+  },
+  {
+    id: "lt-29",
+    text: "Their go-to way to show love is...",
+    choices: [
+      "Cooking something",
+      "Long hugs",
+      "Random sweet texts",
+      "Little gifts",
+    ],
+  },
+  {
+    id: "lt-30",
+    text: "The small thing that always makes their day is...",
+    choices: [
+      "A good coffee",
+      "A song they love coming on",
+      "A text from you",
+      "Getting into bed early",
+    ],
+  },
+  // --- Favorites + preferences (40) ---
+  { id: "lt-31", text: "Their favorite pizza topping is...", choices: ["Pepperoni", "Mushroom", "Pineapple", "Just cheese"] },
+  { id: "lt-32", text: "Their go-to ice cream flavor is...", choices: ["Vanilla", "Chocolate", "Strawberry", "Mint chip"] },
+  { id: "lt-33", text: "Their favorite type of weather is...", choices: ["Sunny & warm", "Rainy & cozy", "Snowy", "Crisp & cool"] },
+  { id: "lt-34", text: "Their dream house is...", choices: ["Beach house", "Mountain cabin", "Downtown loft", "Big suburban place"] },
+  { id: "lt-35", text: "Their favorite kind of restaurant is...", choices: ["Italian", "Mexican", "Asian fusion", "Classic American"] },
+  { id: "lt-36", text: "Their preferred way to travel is...", choices: ["Plane (fastest)", "Road trip", "Train", "Boat / cruise"] },
+  { id: "lt-37", text: "Their favorite holiday is...", choices: ["Christmas", "Thanksgiving", "Fourth of July", "Halloween"] },
+  { id: "lt-38", text: "Their go-to cocktail is...", choices: ["Margarita", "Old fashioned", "Mojito", "Doesn't drink"] },
+  { id: "lt-39", text: "Their preferred workout is...", choices: ["Running / cardio", "Weights", "Yoga", "I don't work out"] },
+  { id: "lt-40", text: "Their favorite flower is...", choices: ["Rose", "Sunflower", "Tulip", "Doesn't care"] },
+  { id: "lt-41", text: "Their dream car is...", choices: ["Sporty / fast", "Luxury sedan", "Big truck / SUV", "Classic / vintage"] },
+  { id: "lt-42", text: "Their favorite social-media app is...", choices: ["Instagram", "TikTok", "Twitter/X", "Facebook"] },
+  { id: "lt-43", text: "Their preferred TV show genre is...", choices: ["Drama", "Comedy", "Reality", "Documentary"] },
+  { id: "lt-44", text: "Their dream pet situation is...", choices: ["Dog", "Cat", "Multiple pets", "No pets"] },
+  { id: "lt-45", text: "Their favorite Disney era is...", choices: ["Classic (Snow White era)", "90s renaissance", "Pixar era", "Not into Disney"] },
+  { id: "lt-46", text: "Their favorite fast food is...", choices: ["Burgers", "Tacos", "Chicken", "Pizza"] },
+  { id: "lt-47", text: "Their karaoke song is...", choices: ["80s rock anthem", "Classic rock ballad", "Pop banger", "They'd refuse to sing"] },
+  { id: "lt-48", text: "Their favorite book genre is...", choices: ["Fiction / novels", "Self-help", "Biography / memoir", "They don't read"] },
+  { id: "lt-49", text: "Their favorite season of life (age-wise)?", choices: ["Childhood", "High school", "20s", "Now"] },
+  { id: "lt-50", text: "The candy they'd pick at a movie?", choices: ["Sour stuff", "Chocolate", "Gummy", "Nothing — popcorn only"] },
+  { id: "lt-51", text: "Their preferred bed size is...", choices: ["Queen", "King", "Full / double", "Twin"] },
+  { id: "lt-52", text: "If they could retire anywhere it's...", choices: ["Beach somewhere tropical", "Mountain town", "Europe", "Exactly where they live now"] },
+  { id: "lt-53", text: "Their perfect weekend morning is...", choices: ["Sleep until noon", "Up early, full agenda", "Slow with coffee", "Workout first thing"] },
+  { id: "lt-54", text: "Their preferred coffee order is...", choices: ["Black", "Latte / with milk", "Cold brew", "Doesn't drink coffee"] },
+  { id: "lt-55", text: "Their dream event to attend is...", choices: ["Super Bowl", "Oscars", "Coachella", "Olympic games"] },
+  { id: "lt-56", text: "Their preferred Sunday activity is...", choices: ["Church or meditation", "Brunch with people", "Lazy TV day", "Outside adventure"] },
+  { id: "lt-57", text: "Their most-used emoji is probably...", choices: ["😂", "❤️", "🔥", "🙄"] },
+  { id: "lt-58", text: "Their go-to snack when stressed is...", choices: ["Chocolate", "Chips", "Ice cream", "They don't stress-eat"] },
+  { id: "lt-59", text: "Their most prized possession is probably...", choices: ["Phone", "A piece of jewelry", "A photo / memory item", "Their car"] },
+  { id: "lt-60", text: "Their dream car interior is...", choices: ["Pristine", "Lived-in / snacks in cupholders", "Somewhere between", "Depends on the day"] },
+  { id: "lt-61", text: "Their favorite pizza crust is...", choices: ["Thin", "Hand-tossed", "Deep dish", "Stuffed crust"] },
+  { id: "lt-62", text: "They'd pick a view of...", choices: ["Ocean", "Mountains", "City skyline", "Forest / woods"] },
+  { id: "lt-63", text: "Their preferred wake-up signal is...", choices: ["Gentle alarm", "Loud buzzer", "Sun through the window", "Internal clock only"] },
+  { id: "lt-64", text: "If they had to wear one color for a year, it'd be...", choices: ["Black", "White", "Their favorite color", "Denim"] },
+  { id: "lt-65", text: "Their preferred drink temperature is...", choices: ["Ice cold", "Room temp", "Hot", "Depends on the drink"] },
+  { id: "lt-66", text: "If forced to karaoke: they'd sing...", choices: ["Alone with a ballad", "Group song", "Something funny", "They'd hide"] },
+  { id: "lt-67", text: "Their pool-or-beach preference is...", choices: ["Pool", "Beach", "Lake", "Neither — I'm indoor"] },
+  { id: "lt-68", text: "Their preferred alone-time is...", choices: ["Reading", "Gaming", "Walking outside", "Scrolling"] },
+  { id: "lt-69", text: "If given a free museum visit: they'd pick...", choices: ["Art", "History", "Science", "Nope, not a museum person"] },
+  { id: "lt-70", text: "They'd rather win...", choices: ["$10k cash", "A dream vacation", "Year of free food", "A new car"] },
+  // --- Personality + vibes (30) ---
+  { id: "lt-71", text: "They'd describe themselves as more...", choices: ["Extrovert", "Introvert", "Depends on day", "Ambivert"] },
+  { id: "lt-72", text: "At a conflict they...", choices: ["Talk it out immediately", "Need space first", "Avoid if possible", "Problem-solve on paper"] },
+  { id: "lt-73", text: "When making big decisions they rely on...", choices: ["Gut", "Logic / lists", "Talking to people", "Sleep on it"] },
+  { id: "lt-74", text: "They're secretly competitive about...", choices: ["Games", "Work", "Being right", "Nothing really"] },
+  { id: "lt-75", text: "Their worst habit is...", choices: ["Procrastinating", "Overthinking", "Being on their phone", "Saying yes too much"] },
+  { id: "lt-76", text: "Their best trait is...", choices: ["Sense of humor", "Empathy", "Work ethic", "Loyalty"] },
+  { id: "lt-77", text: "They handle surprises by...", choices: ["Loving them", "Hating them", "Tolerating them", "Depends on the surprise"] },
+  { id: "lt-78", text: "Their relationship with deadlines is...", choices: ["Early bird", "Right on time", "Down to the wire", "Flexible with"] },
+  { id: "lt-79", text: "Their go-to stress coping mechanism is...", choices: ["Exercise", "Food", "Sleep", "Call someone"] },
+  { id: "lt-80", text: "When they're mad they get...", choices: ["Loud", "Quiet", "Sarcastic", "Productive (cleaning etc)"] },
+  { id: "lt-81", text: "They're most confident about...", choices: ["Their looks", "Their brain", "Their people skills", "Their work"] },
+  { id: "lt-82", text: "Their biggest pet peeve is...", choices: ["Being late", "Loud chewing", "Being talked over", "Messy spaces"] },
+  { id: "lt-83", text: "They prefer mornings or nights?", choices: ["Morning person", "Night owl", "Midday sweet spot", "Depends on sleep"] },
+  { id: "lt-84", text: "In a group photo they...", choices: ["Love being front-center", "Lurk in the back", "Flex / pose", "Avoid the photo"] },
+  { id: "lt-85", text: "Their texting style is...", choices: ["Short and fast", "Paragraphs", "Voice notes", "Emojis heavy"] },
+  { id: "lt-86", text: "If they won the lottery they'd first...", choices: ["Tell family", "Quit their job", "Travel immediately", "Hide it / think"] },
+  { id: "lt-87", text: "Their ideal party size is...", choices: ["2-3 close friends", "10ish people", "Big crowd", "Prefers alone"] },
+  { id: "lt-88", text: "They'd rather do what for fun?", choices: ["Crossword / puzzle", "Play a sport", "Watch a show", "Make something"] },
+  { id: "lt-89", text: "In childhood they were the...", choices: ["Class clown", "Quiet observer", "Overachiever", "Rebel / troublemaker"] },
+  { id: "lt-90", text: "Their biggest fear is...", choices: ["Heights", "Small spaces", "Public speaking", "Being alone"] },
+  { id: "lt-91", text: "Under pressure they...", choices: ["Thrive", "Freeze", "Joke it off", "Delegate"] },
+  { id: "lt-92", text: "When given a surprise gift they...", choices: ["Open it immediately", "Save it for later", "Guess first", "Cry a little"] },
+  { id: "lt-93", text: "In a crisis they call...", choices: ["Their mom/dad", "Best friend", "You", "They handle alone"] },
+  { id: "lt-94", text: "When bored they default to...", choices: ["Scrolling phone", "Eating", "Nap", "Start a project"] },
+  { id: "lt-95", text: "At restaurants they order...", choices: ["Their usual always", "Something new every time", "Whatever you're getting", "Takes 20 minutes to decide"] },
+  { id: "lt-96", text: "They prefer giving or receiving gifts?", choices: ["Giving", "Receiving", "Both equally", "Neither — stresses them"] },
+  { id: "lt-97", text: "Their relationship with asking for help is...", choices: ["Easy", "Never ask", "Only close people", "Asks too much"] },
+  { id: "lt-98", text: "In a fight with a friend they...", choices: ["Confront directly", "Quietly distance", "Wait for them to reach out", "Mediator friend"] },
+  { id: "lt-99", text: "Their road-trip persona is...", choices: ["DJ", "Navigator", "Driver", "Sleeping passenger"] },
+  { id: "lt-100", text: "Their dancing skill is...", choices: ["Actually good", "Confident but chaotic", "Shy at first", "Refuses to dance"] },
+  // --- Us / relationship (30) ---
+  { id: "lt-101", text: "Where did we first meet (or how they'd describe it)?", choices: ["Funny coincidence", "Through friends", "Online", "Work-related"] },
+  { id: "lt-102", text: "Our first date vibe was...", choices: ["Magic", "Awkward but cute", "Slow burn", "Instant chemistry"] },
+  { id: "lt-103", text: "They knew I was the one when...", choices: ["Right away", "Few dates in", "After a specific moment", "It was a slow realization"] },
+  { id: "lt-104", text: "The first thing they noticed about me was...", choices: ["My eyes", "My smile", "My laugh", "My voice"] },
+  { id: "lt-105", text: "Our love language as a couple is mostly...", choices: ["Words", "Touch", "Acts of service", "Quality time"] },
+  { id: "lt-106", text: "They show affection most by...", choices: ["Saying it out loud", "Hugs & touch", "Doing things for me", "Little gifts"] },
+  { id: "lt-107", text: "Our best memory together is...", choices: ["A specific trip", "An ordinary day", "A hard moment we got through", "The first kiss"] },
+  { id: "lt-108", text: "They'd pick our anniversary gift category as...", choices: ["Experience", "Jewelry / personal item", "Something handmade", "They ask what I want"] },
+  { id: "lt-109", text: "Their favorite thing about us is...", choices: ["How we laugh together", "Our communication", "Our intimacy", "How we handle hard stuff"] },
+  { id: "lt-110", text: "Our biggest recurring argument is about...", choices: ["Who does chores", "Money / spending", "Time together vs apart", "Family or in-laws"] },
+  { id: "lt-111", text: "They want to travel with me to...", choices: ["Italy", "Japan", "Somewhere tropical", "Just a road trip is fine"] },
+  { id: "lt-112", text: "When I'm sad they mostly...", choices: ["Hold me quietly", "Try to fix it", "Distract me", "Ask what I need"] },
+  { id: "lt-113", text: "Their favorite photo of us is...", choices: ["Silly candid", "Posed / fancy", "An old one from early days", "Recent one"] },
+  { id: "lt-114", text: "They'd describe my love style as...", choices: ["Passionate", "Steady", "Playful", "Deep"] },
+  { id: "lt-115", text: "Our shared chore disaster is...", choices: ["Dishes", "Laundry", "Trash", "None — we split fine"] },
+  { id: "lt-116", text: "If we got a pet today it'd be...", choices: ["Dog", "Cat", "Plant (pet-adjacent)", "Absolutely not"] },
+  { id: "lt-117", text: "Our relationship song is...", choices: ["A slow love song", "Something upbeat", "An 80s classic", "We don't have one"] },
+  { id: "lt-118", text: "The first fight we had was about...", choices: ["Miscommunication", "Money / logistics", "Family", "Jealousy"] },
+  { id: "lt-119", text: "Our ideal Saturday night in would be...", choices: ["Movie + takeout", "Cooking together", "Board games", "Going to bed early"] },
+  { id: "lt-120", text: "They'd say the sexiest thing I do is...", choices: ["A specific look I give", "The way I laugh", "How I focus on things", "Random kindness"] },
+  { id: "lt-121", text: "Our shared guilty pleasure is...", choices: ["A trashy TV show", "Late-night junk food", "Spending too much on food delivery", "Singing badly in the car"] },
+  { id: "lt-122", text: "If we had a kid they'd want to...", choices: ["Teach them sports", "Teach them art", "Take them everywhere", "Still figuring it out"] },
+  { id: "lt-123", text: "Our future-dream big purchase is...", choices: ["A house", "A car", "A trip of a lifetime", "Investing / saving"] },
+  { id: "lt-124", text: "When they miss me they...", choices: ["Text constantly", "Call randomly", "Stay quiet until we talk", "Plan a surprise"] },
+  { id: "lt-125", text: "The tiny thing I do that they love is...", choices: ["A specific touch", "A word I say", "A look", "How I make them laugh"] },
+  { id: "lt-126", text: "They'd say my best trait is...", choices: ["My kindness", "My humor", "My loyalty", "My ambition"] },
+  { id: "lt-127", text: "Their dream weekend with me is...", choices: ["Just us, no phones", "A new city", "Stay home, no plans", "Group hangout"] },
+  { id: "lt-128", text: "If we had a catchphrase it'd be...", choices: ["An inside joke word", "'Love you' variations", "A silly greeting", "We don't really have one"] },
+  { id: "lt-129", text: "Our pet name style is...", choices: ["Traditional (babe, honey)", "Goofy / made-up", "Using our real names", "Changes every week"] },
+  { id: "lt-130", text: "They'd want their ideal morning with me to include...", choices: ["Cuddling in bed", "Coffee together", "A walk", "Still asleep"] },
+  // --- Weird / fun hypotheticals (20) ---
+  { id: "lt-131", text: "If they were an animal they'd be a...", choices: ["Dog", "Cat", "Something wild", "Owl / nocturnal"] },
+  { id: "lt-132", text: "Their childhood cartoon would be...", choices: ["SpongeBob", "Rugrats", "Scooby-Doo", "Pokemon"] },
+  { id: "lt-133", text: "They'd pick their time machine destination as...", choices: ["Ancient times", "70s/80s", "50 years into the future", "Never — stay in the present"] },
+  { id: "lt-134", text: "If they could only eat one cuisine forever: ...", choices: ["Italian", "Mexican", "Asian", "American classics"] },
+  { id: "lt-135", text: "Zombie apocalypse role: ...", choices: ["Leader", "Scavenger", "Medic", "They die first"] },
+  { id: "lt-136", text: "Their dream superpower is...", choices: ["Fly", "Invisible", "Read minds", "Teleport"] },
+  { id: "lt-137", text: "If they could be famous for one thing: ...", choices: ["Music", "Acting", "Inventing something", "Activism / change"] },
+  { id: "lt-138", text: "They'd name their dog...", choices: ["Classic human name", "Something goofy", "After a character", "Plain / short"] },
+  { id: "lt-139", text: "If they won a gold medal it'd be in...", choices: ["A physical sport", "A mind sport (chess etc)", "Eating contest", "Napping"] },
+  { id: "lt-140", text: "In a heist movie they'd be...", choices: ["The mastermind", "The muscle", "The tech person", "The getaway driver"] },
+  { id: "lt-141", text: "They'd want their funeral song to be...", choices: ["A somber classic", "A banger everyone dances to", "Their favorite band's song", "They haven't thought about it"] },
+  { id: "lt-142", text: "Pick their Hogwarts house...", choices: ["Gryffindor", "Slytherin", "Ravenclaw", "Hufflepuff"] },
+  { id: "lt-143", text: "Their star sign energy is...", choices: ["Fire sign", "Earth sign", "Air sign", "Water sign"] },
+  { id: "lt-144", text: "Their go-to impression of someone is...", choices: ["Their mom/dad", "A famous person", "Me", "They don't do impressions"] },
+  { id: "lt-145", text: "They'd pick as their 'dream co-worker': ...", choices: ["A comedian", "A genius", "Their best friend", "Just someone low-drama"] },
+  { id: "lt-146", text: "If they were a bartender, their signature drink would be...", choices: ["Spicy", "Sweet", "Sour", "Strong and simple"] },
+  { id: "lt-147", text: "They think aliens exist?", choices: ["Definitely", "Probably", "Probably not", "No way"] },
+  { id: "lt-148", text: "Pineapple on pizza: their stance?", choices: ["Yes, obviously", "Absolutely not", "Only sometimes", "Don't care either way"] },
+  { id: "lt-149", text: "They'd pick their villain origin story as...", choices: ["Heartbreak", "Betrayal by friends", "Childhood trauma", "Society failed them"] },
+  { id: "lt-150", text: "If they had to give a TED talk, the topic would be...", choices: ["Their job / expertise", "A life lesson", "A hobby they love", "They'd refuse to do it"] },
+];
+
+function pickLoveTriviaQuestions(n: number): LoveTriviaQuestion[] {
+  const shuffled = [...LOVE_TRIVIA_BANK].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
+// --- Neon Stacker (physics tower, client-simulated, server-arbitrated) ---
+
+type NeonStackerShape = {
+  width: number;
+  height: number;
+  name: string;
+};
+
+type NeonStackerDrop = {
+  index: number;
+  playerIdx: 0 | 1;
+  craneX: number;
+  craneTime: number;
+  shape: NeonStackerShape;
+  at: number;
+};
+
+type NeonStackerState = {
+  gameId: "neon-stacker";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  nextPlayerIdx: 0 | 1;
+  dropCount: number;
+  level: number;
+  playerDropCounts: [number, number];
+  winnerIdx: 0 | 1 | null;
+  lastDrop: NeonStackerDrop | null;
+  startedAt: number;
+};
+
 type ActiveGame =
   | TicTacToeState
   | ConnectFourState
   | HangmanState
   | BattleshipInternal
-  | DrawingGameState;
+  | DrawingGameState
+  | NeonStackerState
+  | LoveTriviaState
+  | PromptGameState
+  | LovingQuestState
+  | WordChainState
+  | TriviaState;
 
 type Room = {
   code: string;
@@ -580,6 +1490,13 @@ function validateFleetPlacement(
 function isGameOver(game: ActiveGame): boolean {
   if (game.gameId === "battleship") return game.winnerIdx !== null;
   if (game.gameId === "drawing") return game.phase === "complete";
+  if (game.gameId === "neon-stacker") return game.winnerIdx !== null;
+  if (game.gameId === "word-chain") return game.winnerIdx !== null;
+  if (game.gameId === "trivia") return game.winner !== null;
+  if (game.gameId === "love-trivia") return game.winner !== null;
+  if (game.gameId === "truth-or-dare") return game.winner !== null;
+  if (game.gameId === "spicy-zone") return game.winner !== null;
+  if (game.gameId === "loving-quest") return game.winner !== null;
   return game.winner !== null;
 }
 
@@ -656,6 +1573,97 @@ async function persistGameEnd(room: Room, game: ActiveGame, io: Server): Promise
           reason: "neon-fleet win",
         });
       }
+    } else if (game.gameId === "neon-stacker") {
+      if (game.winnerIdx !== null) {
+        outcome = "win";
+        winnerClientId = game.players[game.winnerIdx].clientId;
+        loserClientId =
+          game.winnerIdx === 0
+            ? game.players[1].clientId
+            : game.players[0].clientId;
+        pointsAwards.push({
+          clientId: winnerClientId,
+          delta: 20,
+          reason: "neon-stacker win",
+        });
+      }
+    } else if (game.gameId === "love-trivia") {
+      if (game.winner === "done") {
+        // Cooperative — both players score for however well they
+        // predicted their partner. Up to 20 points each (2 per
+        // correct prediction out of 10).
+        outcome = "coop-win";
+        const awards: Array<{ clientId: string; delta: number; reason: string }> =
+          [];
+        game.players.forEach((p, idx) => {
+          const score = game.scores[idx];
+          const delta = Math.min(20, score * 2);
+          if (delta > 0) {
+            awards.push({
+              clientId: p.clientId,
+              delta,
+              reason: `couples-trivia ${score}/10`,
+            });
+          }
+        });
+        for (const award of awards) pointsAwards.push(award);
+      }
+    } else if (
+      game.gameId === "truth-or-dare" ||
+      game.gameId === "spicy-zone"
+    ) {
+      if (game.winner === "win") {
+        // Cooperative — both players score just for finishing.
+        outcome = "coop-win";
+        for (const p of game.players) {
+          pointsAwards.push({
+            clientId: p.clientId,
+            delta: 10,
+            reason: `${game.gameId} finished`,
+          });
+        }
+      }
+    } else if (game.gameId === "loving-quest") {
+      if (game.winner === "done") {
+        outcome = "coop-win";
+        for (const p of game.players) {
+          pointsAwards.push({
+            clientId: p.clientId,
+            delta: 15,
+            reason: "loving-quest completed",
+          });
+        }
+      }
+    } else if (game.gameId === "word-chain") {
+      if (game.winnerIdx !== null) {
+        outcome = "win";
+        winnerClientId = game.players[game.winnerIdx].clientId;
+        loserClientId =
+          game.winnerIdx === 0
+            ? game.players[1].clientId
+            : game.players[0].clientId;
+        pointsAwards.push({
+          clientId: winnerClientId,
+          delta: 18,
+          reason: "word-chain win",
+        });
+      }
+    } else if (game.gameId === "trivia") {
+      if (game.winner === "draw") {
+        outcome = "draw";
+      } else if (game.winner === "win" && game.winnerIdx !== null) {
+        outcome = "win";
+        winnerClientId = game.players[game.winnerIdx].clientId;
+        loserClientId =
+          game.winnerIdx === 0
+            ? game.players[1].clientId
+            : game.players[0].clientId;
+        pointsAwards.push({
+          clientId: winnerClientId,
+          delta: 20,
+          reason: "trivia win",
+        });
+      }
     }
 
     await dbRecordGame({
@@ -681,16 +1689,35 @@ async function persistGameEnd(room: Room, game: ActiveGame, io: Server): Promise
     if (pointsAwards.length > 0) {
       try {
         const balances = await pointsBalances(room.code);
-        for (const [clientId, peer] of room.peers) {
+        for (const [clientId] of room.peers) {
           const currentPoints = balances[clientId] || 0;
-          io.to(room.code).emit("points:sync", { 
-            clientId: clientId, 
-            points: currentPoints 
+          io.to(room.code).emit("points:sync", {
+            clientId: clientId,
+            points: currentPoints,
           });
         }
       } catch (err) {
         console.error("[swoono] points sync error:", err);
       }
+    }
+
+    // Broadcast the updated game history so both clients can refresh
+    // their Recent Games panel without a round-trip.
+    try {
+      const rows = await dbListGameRecords(room.code, 25);
+      const records = rows.map((r) => ({
+        id: r.id,
+        roomCode: r.room_code,
+        gameId: r.game_id,
+        winnerClientId: r.winner_client_id,
+        loserClientId: r.loser_client_id,
+        outcome: r.outcome,
+        startedAt: new Date(r.started_at).getTime(),
+        finishedAt: new Date(r.finished_at).getTime(),
+      }));
+      io.to(room.code).emit("records:update", { records });
+    } catch (err) {
+      console.error("[swoono] records broadcast error:", err);
     }
   } catch (err) {
     console.error("[swoono] persistGameEnd error:", err);
@@ -840,12 +1867,43 @@ io.on("connection", (socket: Socket) => {
     joinedClientId = clientId;
     socket.join(rawCode);
 
+    // Load recent game history so the leaderboard panel has something
+    // to show the moment the room opens.
+    let recentRecords: {
+      id: string;
+      roomCode: string;
+      gameId: string;
+      winnerClientId: string | null;
+      loserClientId: string | null;
+      outcome: "win" | "draw" | "coop-win" | "coop-loss";
+      startedAt: number;
+      finishedAt: number;
+    }[] = [];
+    if (USE_DB) {
+      try {
+        const rows = await dbListGameRecords(rawCode, 25);
+        recentRecords = rows.map((r) => ({
+          id: r.id,
+          roomCode: r.room_code,
+          gameId: r.game_id,
+          winnerClientId: r.winner_client_id,
+          loserClientId: r.loser_client_id,
+          outcome: r.outcome,
+          startedAt: new Date(r.started_at).getTime(),
+          finishedAt: new Date(r.finished_at).getTime(),
+        }));
+      } catch (err) {
+        console.error("[swoono] join records fetch error:", err);
+      }
+    }
+
     ack?.({
       ok: true,
       room: {
         code: rawCode,
         peers: publicPeers(room),
         notes: room.notes,
+        records: recentRecords,
       },
     });
 
@@ -1038,6 +2096,99 @@ io.on("connection", (socket: Socket) => {
           clearInterval(countdown);
         }
       }, 1000);
+    } else if (gameId === "neon-stacker") {
+      game = {
+        gameId: "neon-stacker",
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        nextPlayerIdx: 0,
+        dropCount: 0,
+        level: 1,
+        playerDropCounts: [0, 0],
+        winnerIdx: null,
+        lastDrop: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "love-trivia") {
+      const questions = pickLoveTriviaQuestions(10);
+      game = {
+        gameId: "love-trivia",
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        phase: "setup",
+        questions,
+        setupPredictions: [
+          new Array(questions.length).fill(null),
+          new Array(questions.length).fill(null),
+        ],
+        gameAnswers: [
+          new Array(questions.length).fill(null),
+          new Array(questions.length).fill(null),
+        ],
+        currentIdx: 0,
+        scores: [0, 0],
+        winner: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "truth-or-dare" || gameId === "spicy-zone") {
+      game = {
+        gameId,
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        turnIdx: 0,
+        currentPrompt: null,
+        roundsCompleted: 0,
+        totalRounds: 10,
+        winner: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "loving-quest") {
+      game = {
+        gameId: "loving-quest",
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        prompts: pickLovingQuestPrompts(6),
+        currentIdx: 0,
+        doneFlags: [false, false],
+        winner: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "word-chain") {
+      game = {
+        gameId: "word-chain",
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        turnIdx: 0,
+        nextLetter: randomStartLetter(),
+        history: [],
+        winnerIdx: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "trivia") {
+      game = {
+        gameId: "trivia",
+        players: [
+          { clientId: me.clientId, name: me.name },
+          { clientId: other.clientId, name: other.name },
+        ],
+        questions: pickTriviaQuestions(10),
+        currentIdx: 0,
+        lockedOut: [false, false],
+        scores: [0, 0],
+        winner: null,
+        winnerIdx: null,
+        startedAt: Date.now(),
+      };
     } else {
       return; // unknown game id
     }
@@ -1053,7 +2204,21 @@ io.on("connection", (socket: Socket) => {
       cellIndex?: number;
       column?: number;
       letter?: string;
-      action?: "place" | "fire" | "add-stroke" | "ready-for-reveal";
+      action?:
+        | "place"
+        | "fire"
+        | "add-stroke"
+        | "ready-for-reveal"
+        | "drop"
+        | "reportGameOver"
+        | "answer"
+        | "setupPredict"
+        | "pickPrompt"
+        | "completePrompt"
+        | "skipPrompt"
+        | "markDone"
+        | "submitWord"
+        | "forfeit";
       ships?: {
         name: string;
         len: number;
@@ -1063,7 +2228,22 @@ io.on("connection", (socket: Socket) => {
       }[];
       x?: number;
       y?: number;
+      // drawing game
       stroke?: any; // DrawingStroke type
+      // neon-stacker drop
+      craneX?: number;
+      craneTime?: number;
+      shape?: { width: number; height: number; name: string };
+      // neon-stacker reportGameOver
+      loserIdx?: 0 | 1;
+      // love-trivia / trivia
+      choice?: number;
+      // love-trivia setup phase
+      qIdx?: number;
+      // truth-or-dare / spicy-zone
+      promptType?: "truth" | "dare";
+      // word-chain
+      word?: string;
     }) => {
       if (!joinedCode) return;
       const room = rooms.get(joinedCode);
@@ -1212,6 +2392,287 @@ io.on("connection", (socket: Socket) => {
           }
           changed = true;
         }
+      } else if (
+        game.gameId === "truth-or-dare" ||
+        game.gameId === "spicy-zone"
+      ) {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+        if (game.winner !== null) return;
+
+        if (payload?.action === "pickPrompt") {
+          // Only the active player picks
+          if (myIdx !== game.turnIdx) return;
+          const type = payload.promptType;
+          if (type !== "truth" && type !== "dare") return;
+          if (game.currentPrompt) return; // already picked
+          game.currentPrompt = {
+            type,
+            text: pickPrompt(game.gameId, type),
+          };
+          changed = true;
+        } else if (payload?.action === "completePrompt") {
+          if (myIdx !== game.turnIdx) return;
+          if (!game.currentPrompt) return;
+          game.currentPrompt = null;
+          game.roundsCompleted += 1;
+          game.turnIdx = myIdx === 0 ? 1 : 0;
+          if (game.roundsCompleted >= game.totalRounds) {
+            game.winner = "win";
+          }
+          changed = true;
+        } else if (payload?.action === "skipPrompt") {
+          // Chicken out — swap to the other type without ending the round
+          if (myIdx !== game.turnIdx) return;
+          if (!game.currentPrompt) return;
+          const next: PromptType =
+            game.currentPrompt.type === "truth" ? "dare" : "truth";
+          game.currentPrompt = { type: next, text: pickPrompt(game.gameId, next) };
+          changed = true;
+        }
+      } else if (game.gameId === "loving-quest") {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+        if (game.winner !== null) return;
+
+        if (payload?.action === "markDone") {
+          game.doneFlags[myIdx] = true;
+          if (game.doneFlags[0] && game.doneFlags[1]) {
+            game.currentIdx += 1;
+            game.doneFlags = [false, false];
+            if (game.currentIdx >= game.prompts.length) {
+              game.winner = "done";
+            }
+          }
+          changed = true;
+        }
+      } else if (game.gameId === "word-chain") {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+        if (game.winnerIdx !== null) return;
+
+        if (payload?.action === "submitWord") {
+          if (myIdx !== game.turnIdx) return;
+          const raw = String(payload.word || "").trim().toLowerCase();
+          // Validation: letters only, min length 2, must start with nextLetter,
+          // must not have been used before.
+          if (!/^[a-z]{2,}$/.test(raw)) return;
+          if (raw[0] !== game.nextLetter.toLowerCase()) return;
+          if (game.history.some((h) => h.word === raw)) return;
+
+          game.history.push({ word: raw, playerIdx: myIdx });
+          game.nextLetter = raw[raw.length - 1].toUpperCase();
+          game.turnIdx = myIdx === 0 ? 1 : 0;
+          changed = true;
+        } else if (payload?.action === "forfeit") {
+          if (myIdx !== game.turnIdx) return;
+          // You forfeit = the OTHER player wins
+          game.winnerIdx = myIdx === 0 ? 1 : 0;
+          changed = true;
+        }
+      } else if (game.gameId === "trivia") {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+        if (game.winner !== null) return;
+
+        if (payload?.action === "answer") {
+          const choice = payload.choice;
+          if (
+            typeof choice !== "number" ||
+            choice < 0 ||
+            choice > 3
+          )
+            return;
+          if (game.lockedOut[myIdx]) return;
+          const q = game.questions[game.currentIdx];
+          if (!q) return;
+
+          game.lockedOut[myIdx] = true;
+          if (choice === q.correctIdx) {
+            // First to correct wins the round
+            game.scores[myIdx] += 10;
+            // Advance to next question
+            game.currentIdx += 1;
+            game.lockedOut = [false, false];
+          } else {
+            // Wrong — stay locked out until the round ends. If both are
+            // locked out (both wrong), move on.
+            if (game.lockedOut[0] && game.lockedOut[1]) {
+              game.currentIdx += 1;
+              game.lockedOut = [false, false];
+            }
+          }
+
+          // End of game?
+          if (game.currentIdx >= game.questions.length) {
+            if (game.scores[0] > game.scores[1]) {
+              game.winner = "win";
+              game.winnerIdx = 0;
+            } else if (game.scores[1] > game.scores[0]) {
+              game.winner = "win";
+              game.winnerIdx = 1;
+            } else {
+              game.winner = "draw";
+            }
+          }
+          changed = true;
+        }
+      } else if (game.gameId === "love-trivia") {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+        if (game.winner !== null) return;
+
+        const choice = payload?.choice;
+        const qIdx = payload?.qIdx;
+
+        if (payload?.action === "setupPredict") {
+          // Parallel prediction during setup phase. myIdx submits a
+          // prediction about partner's answer at position qIdx.
+          if (game.phase !== "setup") return;
+          if (
+            typeof choice !== "number" ||
+            choice < 0 ||
+            choice > 3 ||
+            typeof qIdx !== "number" ||
+            qIdx < 0 ||
+            qIdx >= game.questions.length
+          ) {
+            return;
+          }
+          if (game.setupPredictions[myIdx][qIdx] !== null) return;
+          game.setupPredictions[myIdx][qIdx] = choice;
+
+          // Transition to game phase once BOTH players have answered
+          // every question in setup.
+          const allDoneMe = game.setupPredictions[myIdx].every(
+            (v) => v !== null,
+          );
+          const otherIdx: 0 | 1 = myIdx === 0 ? 1 : 0;
+          const allDoneOther = game.setupPredictions[otherIdx].every(
+            (v) => v !== null,
+          );
+          if (allDoneMe && allDoneOther) {
+            game.phase = "game";
+            game.currentIdx = 0;
+          }
+          changed = true;
+        } else if (payload?.action === "answer") {
+          // Game phase — player answers for themselves about the
+          // current question.
+          if (game.phase !== "game") return;
+          if (
+            typeof choice !== "number" ||
+            choice < 0 ||
+            choice > 3
+          ) {
+            return;
+          }
+          const idx = game.currentIdx;
+          if (idx >= game.questions.length) return;
+          if (game.gameAnswers[myIdx][idx] !== null) return;
+          game.gameAnswers[myIdx][idx] = choice;
+
+          // Once both players have answered the current round, score
+          // and advance.
+          const a0 = game.gameAnswers[0][idx];
+          const a1 = game.gameAnswers[1][idx];
+          if (a0 !== null && a1 !== null) {
+            // p0 scored if p0's prediction about p1 (setupPredictions[0][idx])
+            // matches p1's actual answer (a1)
+            if (game.setupPredictions[0][idx] === a1) {
+              game.scores[0] += 1;
+            }
+            if (game.setupPredictions[1][idx] === a0) {
+              game.scores[1] += 1;
+            }
+            game.currentIdx += 1;
+            if (game.currentIdx >= game.questions.length) {
+              game.winner = "done";
+              game.phase = "done";
+            }
+          }
+          changed = true;
+        }
+      } else if (game.gameId === "neon-stacker") {
+        const myIdx: 0 | 1 | null =
+          game.players[0].clientId === me.clientId
+            ? 0
+            : game.players[1].clientId === me.clientId
+              ? 1
+              : null;
+        if (myIdx === null) return;
+
+        if (payload?.action === "drop") {
+          if (game.nextPlayerIdx !== myIdx) return;
+          const craneX = payload.craneX;
+          const craneTime = payload.craneTime;
+          const shape = payload.shape;
+          if (
+            typeof craneX !== "number" ||
+            typeof craneTime !== "number" ||
+            !shape ||
+            typeof shape.width !== "number" ||
+            typeof shape.height !== "number" ||
+            typeof shape.name !== "string"
+          ) {
+            return;
+          }
+          game.dropCount += 1;
+          game.playerDropCounts[myIdx] += 1;
+          // Level up every 5 drops — matches Chris's spec.
+          if (game.dropCount > 0 && game.dropCount % 5 === 0) {
+            game.level += 1;
+          }
+          game.lastDrop = {
+            index: game.dropCount,
+            playerIdx: myIdx,
+            craneX,
+            craneTime,
+            shape: {
+              width: shape.width,
+              height: shape.height,
+              name: shape.name,
+            },
+            at: Date.now(),
+          };
+          game.nextPlayerIdx = myIdx === 0 ? 1 : 0;
+          changed = true;
+        } else if (payload?.action === "reportGameOver") {
+          // Client-reported game over. The loser is whoever made the
+          // last drop — their block caused the tower to collapse.
+          // Both clients may report concurrently; the winnerIdx guard
+          // below makes this idempotent so only the first one wins.
+          if (game.winnerIdx !== null) return; // already ended
+          if (!game.lastDrop) return;
+          const loserIdx = game.lastDrop.playerIdx;
+          game.winnerIdx = loserIdx === 0 ? 1 : 0;
+          changed = true;
+        }
       } else if (game.gameId === "hangman") {
         const letter = String(payload?.letter || "").toLowerCase();
         if (!/^[a-z]$/.test(letter)) return;
@@ -1275,6 +2736,100 @@ io.on("connection", (socket: Socket) => {
     room.game = null;
     emitGameUpdate(room);
   });
+
+  // -- Room reset ----------------------------------------------------------
+  // Escape hatch for stuck rooms: an owner requests a full wipe. All peers
+  // in the room are ejected, Supabase tables scoped to the code are
+  // cleared, and the room is rebuilt empty. Requires the caller to be one
+  // of the current owners in memory — this is NOT cryptographic proof of
+  // identity but stops a random third party from wiping someone else's
+  // room just because they know the code.
+  //
+  // Also supports a "force" mode that only requires possession of the
+  // clientId the caller is using — useful when the server lost in-memory
+  // state but Supabase still owns the lock. The caller gets a single
+  // escape hatch they can invoke from their own device.
+  socket.on(
+    "room:reset",
+    async (
+      payload: { code?: string; clientId?: string; force?: boolean },
+      ack?: (res: unknown) => void,
+    ) => {
+      const rawCode = sanitizeRoomCode(payload?.code || "");
+      const clientId = (payload?.clientId || "").slice(0, 64);
+      const force = payload?.force === true;
+      if (!rawCode || !clientId) {
+        ack?.({ ok: false, error: "code and clientId required" });
+        return;
+      }
+
+      // Authorization check: caller must currently be an owner on this
+      // socket's in-memory room, OR the Supabase row must name them.
+      const memRoom = rooms.get(rawCode);
+      const memOwner = !!memRoom && memRoom.owners.includes(clientId);
+
+      let dbOwner = false;
+      if (USE_DB) {
+        try {
+          const { data, error } = await (
+            await import("./db")
+          )
+            .db()
+            .from("rooms")
+            .select("owner_client_ids")
+            .eq("code", rawCode)
+            .maybeSingle();
+          if (!error && data) {
+            const owners: string[] =
+              (data as { owner_client_ids: string[] })
+                .owner_client_ids || [];
+            dbOwner = owners.includes(clientId);
+          }
+        } catch (e) {
+          console.error("[swoono] room:reset owner check error:", e);
+        }
+      }
+
+      if (!memOwner && !dbOwner && !force) {
+        ack?.({
+          ok: false,
+          error:
+            "not an owner of this room. If you're stuck, pass force=true from " +
+            "the same clientId to bypass (dev escape hatch).",
+        });
+        return;
+      }
+
+      // Eject any connected peers
+      if (memRoom) {
+        for (const peer of memRoom.peers.values()) {
+          io.to(peer.socketId).emit("room:reset:forced", { code: rawCode });
+        }
+      }
+
+      // Wipe Supabase scoped to this room
+      if (USE_DB) {
+        try {
+          await dbWipeRoom(rawCode);
+        } catch (e) {
+          console.error("[swoono] room:reset DB wipe error:", e);
+          ack?.({ ok: false, error: "db wipe failed" });
+          return;
+        }
+      }
+
+      // Drop in-memory state
+      rooms.delete(rawCode);
+      joinedCode = null;
+      joinedClientId = null;
+
+      console.log(
+        `[swoono] room:reset code=${rawCode} by=${clientId} mem=${memOwner} db=${dbOwner} force=${force}`,
+      );
+
+      ack?.({ ok: true });
+    },
+  );
 
   // -- Reward effect relay -------------------------------------------------
   // A sends an effect (kiss, slap, fireworks) → server forwards to the

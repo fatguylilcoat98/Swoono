@@ -13,6 +13,17 @@ export type Note = {
   createdAt: number;
 };
 
+export type GameRecord = {
+  id: string;
+  roomCode: string;
+  gameId: string;
+  winnerClientId: string | null;
+  loserClientId: string | null;
+  outcome: "win" | "draw" | "coop-win" | "coop-loss";
+  startedAt: number;
+  finishedAt: number;
+};
+
 export type JoinResult =
   | {
       ok: true;
@@ -20,6 +31,7 @@ export type JoinResult =
         code: string;
         peers: Peer[];
         notes: Note[];
+        records?: GameRecord[];
       };
     }
   | { ok: false; error: string };
@@ -182,13 +194,206 @@ export type DrawingGameState = {
   startedAt: number;
 };
 
+// --- Prompt game (Truth or Dare / Spicy Zone shared engine) ---
+
+export type PromptType = "truth" | "dare";
+
+export type PromptGameState = {
+  gameId: "truth-or-dare" | "spicy-zone";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  /** Whose turn to pick + perform */
+  turnIdx: 0 | 1;
+  /** The prompt shown right now (null between rounds) */
+  currentPrompt: { type: PromptType; text: string } | null;
+  /** Rounds completed */
+  roundsCompleted: number;
+  /** How many rounds total this game */
+  totalRounds: number;
+  /** "win" once the full game is played */
+  winner: "win" | null;
+  startedAt: number;
+};
+
+// --- Loving Quest (cooperative sequence) ---
+
+export type LovingQuestState = {
+  gameId: "loving-quest";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  prompts: string[];
+  currentIdx: number;
+  /** Both players must tap Done to advance. */
+  doneFlags: [boolean, boolean];
+  winner: "done" | null;
+  startedAt: number;
+};
+
+// --- Word Chain (turn-based word linking) ---
+
+export type WordChainEntry = {
+  word: string;
+  playerIdx: 0 | 1;
+};
+
+export type WordChainState = {
+  gameId: "word-chain";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  turnIdx: 0 | 1;
+  /** Required starting letter for the next word */
+  nextLetter: string;
+  history: WordChainEntry[];
+  /** Winner index (the one who didn't forfeit) */
+  winnerIdx: 0 | 1 | null;
+  startedAt: number;
+};
+
+// --- Trivia (competitive multiple choice race) ---
+
+export type TriviaQuestion = {
+  id: string;
+  text: string;
+  choices: string[];
+  /** Index of the correct choice (0-3). Kept on both sides for display. */
+  correctIdx: number;
+  category?: string;
+};
+
+export type TriviaState = {
+  gameId: "trivia";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  questions: TriviaQuestion[];
+  currentIdx: number;
+  /** Players who have already answered (correctly or wrongly) this round */
+  lockedOut: [boolean, boolean];
+  /** Running scores */
+  scores: [number, number];
+  /** "win" | "draw" | null */
+  winner: "win" | "draw" | null;
+  /** Winner index if winner === "win" */
+  winnerIdx: 0 | 1 | null;
+  startedAt: number;
+};
+
+// --- Love Trivia (cooperative couples game) ---
+
+export type LoveTriviaQuestion = {
+  id: string;
+  text: string;
+  choices: string[]; // always length 4
+};
+
+/**
+ * Newlywed-style two-phase game.
+ *
+ * Phase 1 — SETUP: each player is shown the same 10 questions and
+ * predicts how THEIR PARTNER will answer. Submissions are parallel
+ * (no turn-taking).
+ *
+ * Phase 2 — GAME: each player answers the same 10 questions ABOUT
+ * THEMSELVES. Once both have submitted for a round, the round
+ * reveals: partner's prediction vs actual, with a match/miss flag.
+ *
+ * SCORE: a player scores a point each time THEIR prediction about
+ * their partner (from setup) matches the partner's actual answer
+ * (from game). So `scores[0]` is how well player 0 knows player 1.
+ */
+export type LoveTriviaState = {
+  gameId: "love-trivia";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  phase: "setup" | "game" | "done";
+  /** 10 questions selected at game start */
+  questions: LoveTriviaQuestion[];
+  /** Setup predictions per player — length 10 each, null for unanswered */
+  setupPredictions: [(number | null)[], (number | null)[]];
+  /** Each player's actual answers about themselves (game phase) */
+  gameAnswers: [(number | null)[], (number | null)[]];
+  /** Index into questions for the current game-phase round */
+  currentIdx: number;
+  /** Running scores (player N knowing partner) */
+  scores: [number, number];
+  /** "done" when all 10 rounds of the game phase have been revealed */
+  winner: "done" | null;
+  startedAt: number;
+};
+
+// --- Neon Stacker (physics tower) ---
+// Server tracks whose turn, how many drops per player, level progression.
+// The matter.js physics runs client-side — sync happens via deterministic
+// replay of the authoritative drop events the server broadcasts.
+
+export type NeonStackerShape = {
+  width: number;
+  height: number;
+  name: string;
+};
+
+export type NeonStackerDrop = {
+  /** Global drop index, increments on every drop */
+  index: number;
+  /** Which player (0 or 1) dropped this block */
+  playerIdx: 0 | 1;
+  /** Crane X position in the canvas at the moment of drop */
+  craneX: number;
+  /** Crane time (used to reconstruct crane animation phase) */
+  craneTime: number;
+  /** The block shape chosen for this drop */
+  shape: NeonStackerShape;
+  /** Server-authoritative timestamp */
+  at: number;
+};
+
+export type NeonStackerState = {
+  gameId: "neon-stacker";
+  players: [
+    { clientId: string; name: string },
+    { clientId: string; name: string },
+  ];
+  /** 0 or 1 — whose turn to drop next */
+  nextPlayerIdx: 0 | 1;
+  /** Total drops so far (both players combined) */
+  dropCount: number;
+  /** Current level — every 5 drops increments this; base shrinks */
+  level: number;
+  /** Per-player drop counts (for the leaderboard / stats) */
+  playerDropCounts: [number, number];
+  /** Winner index, null while game is live */
+  winnerIdx: 0 | 1 | null;
+  /**
+   * Last drop event. When this changes both clients replay it locally
+   * through the matter.js engine. The server never simulates physics —
+   * clients do, and trust each other's reported physics outcomes.
+   */
+  lastDrop: NeonStackerDrop | null;
+  startedAt: number;
+};
+
 /** Union of all game state shapes. Add new games here as they land. */
 export type ActiveGame =
   | TicTacToeState
   | ConnectFourState
   | HangmanState
   | BattleshipState
-  | DrawingGameState;
+  | DrawingGameState
+  | NeonStackerState
+  | LoveTriviaState
+  | PromptGameState
+  | LovingQuestState
+  | WordChainState
+  | TriviaState;
 
 // --- Production utility types ---------------------------------------------
 

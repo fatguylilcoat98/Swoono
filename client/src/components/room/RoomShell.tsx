@@ -12,6 +12,7 @@ import TiersPanel from "../tiers/TiersPanel";
 import GlassPanel from "../ui/GlassPanel";
 import ModeSwitcher from "../theme/ModeSwitcher";
 import DistanceBadge from "../distance/DistanceBadge";
+import MusicPlayer from "../audio/MusicPlayer";
 import { getGame } from "../../lib/registries/gameRegistry";
 
 type RoomShellProps = {
@@ -24,6 +25,7 @@ export default function RoomShell({ onLeave }: RoomShellProps) {
   const clientId = useRoomStore((s) => s.clientId);
   const activeGame = useRoomStore((s) => s.activeGame);
   const exitGame = useRoomStore((s) => s.exitGame);
+  const resetRoom = useRoomStore((s) => s.resetRoom);
   const points = usePointsStore((s) => s.points);
   const awardPoints = usePointsStore((s) => s.award);
   const theme = useThemeStore((s) => s.theme);
@@ -70,6 +72,7 @@ export default function RoomShell({ onLeave }: RoomShellProps) {
             <div className="flex items-center gap-4 flex-wrap">
               <PresenceDots me={me?.name} partner={partner?.name} />
               <DistanceBadge />
+              <MusicPlayer />
               <div className="text-swoono-dim text-xs uppercase tracking-widest hidden sm:block">
                 <span className="text-swoono-ink text-base font-medium mr-1">
                   {points}
@@ -77,6 +80,30 @@ export default function RoomShell({ onLeave }: RoomShellProps) {
                 pts
               </div>
               <ModeSwitcher />
+              <button
+                onClick={async () => {
+                  const msg =
+                    "Reset this room? Everything will be erased: notes, " +
+                    "game history, points, and both owners. You and your " +
+                    "partner will both be kicked back to the landing screen.";
+                  if (!window.confirm(msg)) return;
+                  const ok = await resetRoom();
+                  if (!ok) {
+                    if (
+                      window.confirm(
+                        "Could not reset (you may not be listed as an " +
+                          "owner on this device). Force the reset anyway?",
+                      )
+                    ) {
+                      await resetRoom(true);
+                    }
+                  }
+                }}
+                className="text-swoono-dim text-xs uppercase tracking-widest hover:text-swoono-accent transition-colors"
+                title="Wipe this room completely"
+              >
+                Reset
+              </button>
               <button
                 onClick={onLeave}
                 className="text-swoono-dim text-xs uppercase tracking-widest hover:text-swoono-accent transition-colors"

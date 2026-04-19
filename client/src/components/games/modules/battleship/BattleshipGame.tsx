@@ -273,7 +273,7 @@ function mkParticle(type: ParticleType, x: number, y: number): Particle {
     p.vx = (Math.random() - 0.5) * 2;
     p.vy = (Math.random() - 0.5) * 2;
     p.vz = -Math.random() * 3 - 2;
-    p.size = Math.random() * 25 + 20;
+    p.size = Math.random() * 12 + 8;
   } else if (type === "ember") {
     const a = Math.random() * Math.PI * 2;
     const s = Math.random() * 8 + 4;
@@ -305,8 +305,8 @@ function updateParticle(p: Particle) {
     p.vz += 0.2;
     p.vx *= 0.98;
     p.vy *= 0.98;
-    p.life -= 0.008;
-    p.size += 0.8;
+    p.life -= 0.015;
+    p.size += 0.3;
   } else if (p.type === "ember") {
     p.trail.push({ x: p.x, y: p.y, z: p.z });
     if (p.trail.length > 8) p.trail.shift();
@@ -715,39 +715,166 @@ export default function BattleshipGame({
         });
       } else {
         // Battle/done: show targeting grid (my shots at opponent)
-        game.myShotsFired.forEach((shot) => {
+        //
+        // Layer 1: ghost overlay of YOUR OWN fleet — translucent so the
+        // player can always see where their ships are. Answers Chris's
+        // "I can't see where my ships are" complaint.
+        if (game.myShips && game.myShips.length > 0) {
+          ctx.save();
+          ctx.globalAlpha = 0.22;
+          game.myShips.forEach((ship) => {
+            draw3DShip(
+              ctx,
+              {
+                x: ship.x,
+                y: ship.y,
+                len: ship.len,
+                vertical: ship.vertical,
+                hits: ship.hits,
+                hitPositions: ship.hitPositions,
+                bobPhase: (ship.x + ship.y) * 0.3,
+              },
+              cellSize,
+              "#00BFFF",
+              anim.time,
+              { glow: false },
+            );
+          });
+          ctx.restore();
+        }
+
+        // Build a map of the opponent's hit cells → which sunk ship
+        // that cell belongs to (if any). Cells in a sunk ship render as
+        // a dark burned-out hulk; cells in a still-floating ship render
+        // as a ship-segment silhouette with fire particles on top.
+        const sunkShipNames = new Set(
+          game.myShotsFired
+            .filter((s) => s.sunkShipName)
+            .map((s) => s.sunkShipName as string),
+        );
+
+        // Group my hit shots by the presumed ship they hit (inferred
+        // via adjacency). Simple heuristic: a run of adjacent hit cells
+        // is one ship. Good enough for visual effect.
+        const hitCells = game.myShotsFired.filter((s) => s.hit);
+
+        // Layer 2: draw every hit shot with real ship-segment visuals.
+        hitCells.forEach((shot) => {
           const scx = shot.x * cellSize + cellSize / 2;
           const scy = shot.y * cellSize + cellSize / 2;
-          if (shot.hit) {
-            const pulse = Math.sin(anim.time * 6) * 0.3 + 0.7;
-            ctx.shadowBlur = 30 * pulse;
-            ctx.shadowColor = "#FF0055";
+          const isSunkHit =
+            !!shot.sunkShipName && sunkShipNames.has(shot.sunkShipName);
+
+          if (isSunkHit) {
+            // Dark burned-out hulk
+            ctx.save();
+            ctx.fillStyle = "#331111";
             ctx.strokeStyle = "#FF0055";
-            ctx.lineWidth = 5;
-            const sz = cellSize * 0.35;
-            ctx.beginPath();
-            ctx.moveTo(scx - sz, scy - sz);
-            ctx.lineTo(scx + sz, scy + sz);
-            ctx.moveTo(scx + sz, scy - sz);
-            ctx.lineTo(scx - sz, scy + sz);
-            ctx.stroke();
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 14;
+            ctx.shadowColor = "#FF0055";
+            const inset = cellSize * 0.12;
+            ctx.fillRect(
+              shot.x * cellSize + inset,
+              shot.y * cellSize + inset,
+              cellSize - inset * 2,
+              cellSize - inset * 2,
+            );
+            ctx.strokeRect(
+              shot.x * cellSize + inset,
+              shot.y * cellSize + inset,
+              cellSize - inset * 2,
+              cellSize - inset * 2,
+            );
+            // Red cross on the dead segment
             ctx.shadowBlur = 0;
-          } else {
-            const ripple = Math.sin(anim.time * 3) * 0.2 + 0.8;
-            ctx.strokeStyle = `rgba(100,200,255,${0.5 * ripple})`;
+            ctx.strokeStyle = "#FF4477";
             ctx.lineWidth = 3;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = "rgba(100,200,255,0.6)";
-            for (let r = 1; r <= 3; r++) {
-              const rad = 8 * r * ripple;
-              if (rad > 0) {
-                ctx.beginPath();
-                ctx.arc(scx, scy, rad, 0, Math.PI * 2);
-                ctx.stroke();
-              }
+            const d = cellSize * 0.22;
+            ctx.beginPath();
+            ctx.moveTo(scx - d, scy - d);
+            ctx.lineTo(scx + d, scy + d);
+            ctx.moveTo(scx + d, scy - d);
+            ctx.lineTo(scx - d, scy + d);
+            ctx.stroke();
+            ctx.restore();
+          } else {
+            // Still-floating ship segment being hit — reveal the
+            // segment shape and render fire + smoke on it
+            ctx.save();
+            ctx.fillStyle = "rgba(100,100,100,0.55)";
+            ctx.strokeStyle = "#FF8844";
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 18;
+            ctx.shadowColor = "#FF6622";
+            const inset = cellSize * 0.14;
+            ctx.fillRect(
+              shot.x * cellSize + inset,
+              shot.y * cellSize + inset,
+              cellSize - inset * 2,
+              cellSize - inset * 2,
+            );
+            ctx.strokeRect(
+              shot.x * cellSize + inset,
+              shot.y * cellSize + inset,
+              cellSize - inset * 2,
+              cellSize - inset * 2,
+            );
+
+            // Fire animation — flicker
+            const fireFlicker =
+              Math.sin(anim.time * 11 + shot.x * 2 + shot.y * 3) * 0.3 +
+              0.7;
+            const fireRadius = cellSize * 0.18 * fireFlicker;
+            const fireGrad = ctx.createRadialGradient(
+              scx,
+              scy,
+              0,
+              scx,
+              scy,
+              fireRadius,
+            );
+            fireGrad.addColorStop(0, "rgba(255,255,180,0.95)");
+            fireGrad.addColorStop(0.4, "rgba(255,140,0,0.85)");
+            fireGrad.addColorStop(0.8, "rgba(255,40,0,0.5)");
+            fireGrad.addColorStop(1, "rgba(100,0,0,0)");
+            ctx.fillStyle = fireGrad;
+            ctx.beginPath();
+            ctx.arc(scx, scy, fireRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Persistent gentle smoke particles rising off the segment
+            if (Math.random() < 0.015) {
+              anim.particles.push(mkParticle(
+                "smoke",
+                scx + (Math.random() - 0.5) * cellSize * 0.4,
+                scy + (Math.random() - 0.5) * cellSize * 0.2,
+              ));
             }
-            ctx.shadowBlur = 0;
+            ctx.restore();
           }
+        });
+
+        // Layer 3: misses (water ripples) — smaller so they don't
+        // compete visually with hits
+        game.myShotsFired.forEach((shot) => {
+          if (shot.hit) return;
+          const scx = shot.x * cellSize + cellSize / 2;
+          const scy = shot.y * cellSize + cellSize / 2;
+          const ripple = Math.sin(anim.time * 3) * 0.2 + 0.8;
+          ctx.strokeStyle = `rgba(100,200,255,${0.45 * ripple})`;
+          ctx.lineWidth = 1.5;
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = "rgba(100,200,255,0.5)";
+          for (let r = 1; r <= 2; r++) {
+            const rad = 4 * r * ripple;
+            if (rad > 0) {
+              ctx.beginPath();
+              ctx.arc(scx, scy, rad, 0, Math.PI * 2);
+              ctx.stroke();
+            }
+          }
+          ctx.shadowBlur = 0;
         });
       }
 

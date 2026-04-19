@@ -4,6 +4,13 @@ import ConnectFourGame from "../../components/games/modules/connect-four/Connect
 import HangmanGame from "../../components/games/modules/hangman/HangmanGame";
 import BattleshipGame from "../../components/games/modules/battleship/BattleshipGame";
 import DrawingGame from "../../components/games/modules/drawing/DrawingGame";
+import NeonStackerGame from "../../components/games/modules/neon-stacker/NeonStackerGame";
+import LoveTriviaGame from "../../components/games/modules/love-trivia/LoveTriviaGame";
+import TruthOrDareGame from "../../components/games/modules/truth-or-dare/TruthOrDareGame";
+import SpicyZoneGame from "../../components/games/modules/spicy-zone/SpicyZoneGame";
+import LovingQuestGame from "../../components/games/modules/loving-quest/LovingQuestGame";
+import WordChainGame from "../../components/games/modules/word-chain/WordChainGame";
+import TriviaGame from "../../components/games/modules/trivia/TriviaGame";
 
 export type GameCategory = "arcade" | "couples";
 
@@ -95,25 +102,28 @@ registerGame({
 });
 
 registerGame({
-  id: "word-builder",
-  name: "Word Builder",
+  id: "word-chain",
+  name: "Word Chain",
   category: "arcade",
-  description: "Make as many valid words as you can, together.",
+  description:
+    "Turn-based word chain. Each word must start with the last letter of the previous. Forfeit loses.",
   emoji: "🔤",
   tier: 0,
   pointsOnWin: 18,
-  status: "placeholder",
+  status: "ready",
+  component: WordChainGame,
 });
 
 registerGame({
   id: "trivia",
   name: "Trivia",
   category: "arcade",
-  description: "Race to the right answer. First tap wins the round.",
+  description: "Race to the right answer. First tap wins the round. 10 rounds.",
   emoji: "🧠",
   tier: 0,
   pointsOnWin: 20,
-  status: "placeholder",
+  status: "ready",
+  component: TriviaGame,
 });
 
 registerGame({
@@ -126,6 +136,18 @@ registerGame({
   pointsOnWin: 25,
   status: "ready",
   component: BattleshipGame,
+});
+
+registerGame({
+  id: "neon-stacker",
+  name: "Neon Stacker",
+  category: "arcade",
+  description: "Physics tower builder. Stack blocks, rotate levels, don't let it fall.",
+  emoji: "🧱",
+  tier: 0,
+  pointsOnWin: 20,
+  status: "ready",
+  component: NeonStackerGame,
 });
 
 // --- Couples ---
@@ -146,42 +168,47 @@ registerGame({
   id: "truth-or-dare",
   name: "Truth or Dare",
   category: "couples",
-  description: "Playful prompts. Paste your deck and I'll wire them up.",
+  description: "Classic 10-round turn-based. Playful, PG-13.",
   emoji: "💬",
   tier: 0,
   pointsOnWin: 15,
-  status: "placeholder",
+  status: "ready",
+  component: TruthOrDareGame,
 });
 
 registerGame({
   id: "loving-quest",
   name: "Loving Quest",
   category: "couples",
-  description: "Shared goals to complete together.",
+  description: "Cooperative 6-step experience. No competition, just presence.",
   emoji: "🎯",
   tier: 0,
   pointsOnWin: 15,
-  status: "placeholder",
+  status: "ready",
+  component: LovingQuestGame,
 });
 
 registerGame({
   id: "love-trivia",
-  name: "Love Trivia",
+  name: "Couples Trivia",
   category: "couples",
-  description: "Firsts, favorites, the little things. About you two.",
-  emoji: "💭",
-  tier: 1,
+  description:
+    "Two phases: predict your partner's answers, then answer for yourself. See how well you two know each other.",
+  emoji: "💞",
+  tier: 0,
   pointsOnWin: 20,
-  status: "placeholder",
+  status: "ready",
+  component: LoveTriviaGame,
 });
 
 registerGame({
   id: "spicy-zone",
   name: "Spicy Zone",
   category: "couples",
-  description: "18+ intimate challenges. For the two of you only.",
+  description: "18+ prompts. Tasteful, not graphic. 10 rounds.",
   emoji: "🔥",
   tier: 2,
   pointsOnWin: 25,
-  status: "placeholder",
+  status: "ready",
+  component: SpicyZoneGame,
 });
