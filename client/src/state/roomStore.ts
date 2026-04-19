@@ -43,6 +43,7 @@ type RoomState = {
   makeMove: (cellIndex: number) => void;
   dropColumn: (column: number) => void;
   guessLetter: (letter: string) => void;
+  guessWord: (word: string) => void;
   submitBattleshipPlacement: (
     ships: {
       name: string;
@@ -53,7 +54,7 @@ type RoomState = {
     }[],
   ) => void;
   fireBattleshipShot: (x: number, y: number) => void;
-  makeDrawingMove: (action: "add-stroke" | "ready-for-reveal", data?: any) => void;
+  makeDrawingMove: (action: "add-stroke" | "ready-for-reveal" | "undo" | "clear", data?: any) => void;
   dropNeonStackerBlock: (
     craneX: number,
     craneTime: number,
@@ -269,6 +270,10 @@ export const useRoomStore = create<RoomState>((set, get) => {
       socket.emit("game:move", { letter });
     },
 
+    guessWord: (word) => {
+      socket.emit("game:move", { word });
+    },
+
     submitBattleshipPlacement: (ships) => {
       socket.emit("game:move", { action: "place", ships });
     },
@@ -282,6 +287,10 @@ export const useRoomStore = create<RoomState>((set, get) => {
         socket.emit("game:move", { action: "add-stroke", stroke: data });
       } else if (action === "ready-for-reveal") {
         socket.emit("game:move", { action: "ready-for-reveal" });
+      } else if (action === "undo") {
+        socket.emit("game:move", { action: "undo" });
+      } else if (action === "clear") {
+        socket.emit("game:move", { action: "clear" });
       }
     },
 

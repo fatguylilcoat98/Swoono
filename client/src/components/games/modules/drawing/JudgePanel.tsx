@@ -37,20 +37,18 @@ const JUDGE_DATA = {
 export default function JudgePanel({ game, selfClientId }: JudgePanelProps) {
   const [revealedJudges, setRevealedJudges] = useState<number>(0);
 
-  // Auto-reveal judges one by one
+  // Initialize with first judge shown
   useEffect(() => {
-    if (game.phase !== "judging") return;
+    if (game.phase === "judging" && revealedJudges === 0) {
+      setRevealedJudges(1);
+    }
+  }, [game.phase, revealedJudges]);
 
-    const revealNext = () => {
-      if (revealedJudges < game.judgeScores.length) {
-        setRevealedJudges(prev => prev + 1);
-      }
-    };
-
-    // Start revealing after a brief delay
-    const timer = setTimeout(revealNext, revealedJudges === 0 ? 1000 : 2000);
-    return () => clearTimeout(timer);
-  }, [game.phase, game.judgeScores.length, revealedJudges]);
+  const revealNextJudge = () => {
+    if (revealedJudges < game.judgeScores.length) {
+      setRevealedJudges(prev => prev + 1);
+    }
+  };
 
   if (game.phase === "complete") {
     return <CompletedView game={game} selfClientId={selfClientId} />;
@@ -79,16 +77,26 @@ export default function JudgePanel({ game, selfClientId }: JudgePanelProps) {
         ))}
       </div>
 
-      {revealedJudges >= game.judgeScores.length && (
-        <div className="text-center mt-6">
-          <p className="text-swoono-accent text-lg font-medium">
-            All judges have spoken! 🎉
-          </p>
-          <p className="text-swoono-dim text-sm mt-2">
-            Great job, both of you!
-          </p>
-        </div>
-      )}
+      {/* Next Judge or Complete button */}
+      <div className="text-center mt-6">
+        {revealedJudges < game.judgeScores.length ? (
+          <button
+            onClick={revealNextJudge}
+            className="px-6 py-3 bg-swoono-accent text-white rounded-xl font-medium hover:bg-swoono-accent/90 transition-colors"
+          >
+            Next Judge ({revealedJudges}/{game.judgeScores.length})
+          </button>
+        ) : (
+          <div>
+            <p className="text-swoono-accent text-lg font-medium">
+              All judges have spoken! 🎉
+            </p>
+            <p className="text-swoono-dim text-sm mt-2">
+              Great job, both of you!
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

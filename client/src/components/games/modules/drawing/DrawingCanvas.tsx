@@ -4,6 +4,8 @@ import type { DrawingStroke } from "../../../../lib/types";
 interface DrawingCanvasProps {
   strokes: DrawingStroke[];
   onStrokeComplete: (stroke: DrawingStroke) => void;
+  onUndo?: () => void;
+  onClear?: () => void;
   disabled?: boolean;
 }
 
@@ -13,6 +15,8 @@ const STROKE_WIDTHS = [2, 4, 8, 12];
 export default function DrawingCanvas({
   strokes,
   onStrokeComplete,
+  onUndo,
+  onClear,
   disabled = false,
 }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -168,27 +172,25 @@ export default function DrawingCanvas({
     };
   }, [startDrawing, continueDrawing, stopDrawing]);
 
-  const clearCanvas = () => {
-    // This would require server support to clear all strokes
-    // For now, just clear locally (not persistent)
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const handleUndo = () => {
+    if (onUndo) onUndo();
+  };
+
+  const handleClear = () => {
+    if (onClear) onClear();
   };
 
   return (
     <div className="flex flex-col h-full">
-      {/* Drawing controls */}
-      <div className="flex items-center gap-4 mb-4 flex-wrap">
-        {/* Color picker */}
-        <div className="flex gap-2">
+      {/* Drawing controls - Compact mobile layout */}
+      <div className="flex flex-col gap-3 mb-3">
+        {/* Top row: Colors */}
+        <div className="flex gap-1.5 justify-center">
           {COLORS.map((color) => (
             <button
               key={color}
               onClick={() => setSelectedColor(color)}
-              className={`w-8 h-8 rounded-full border-2 transition-all ${
+              className={`w-7 h-7 rounded-full border-2 transition-all ${
                 selectedColor === color
                   ? "border-swoono-accent scale-110"
                   : "border-white/20 hover:border-white/40"
@@ -198,34 +200,46 @@ export default function DrawingCanvas({
           ))}
         </div>
 
-        {/* Brush size */}
-        <div className="flex gap-2">
-          {STROKE_WIDTHS.map((width) => (
-            <button
-              key={width}
-              onClick={() => setSelectedWidth(width)}
-              className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${
-                selectedWidth === width
-                  ? "border-swoono-accent bg-swoono-accent/20"
-                  : "border-white/20 hover:border-white/40 bg-white/5"
-              }`}
-            >
-              <div
-                className="rounded-full bg-current"
-                style={{ width: width, height: width }}
-              />
-            </button>
-          ))}
-        </div>
+        {/* Bottom row: Brushes and Actions */}
+        <div className="flex items-center justify-between gap-3">
+          {/* Brush sizes */}
+          <div className="flex gap-1.5">
+            {STROKE_WIDTHS.map((width) => (
+              <button
+                key={width}
+                onClick={() => setSelectedWidth(width)}
+                className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                  selectedWidth === width
+                    ? "border-swoono-accent bg-swoono-accent/20"
+                    : "border-white/20 hover:border-white/40 bg-white/5"
+                }`}
+              >
+                <div
+                  className="rounded-full bg-current"
+                  style={{ width: Math.min(width, 5), height: Math.min(width, 5) }}
+                />
+              </button>
+            ))}
+          </div>
 
-        {/* Clear button */}
-        <button
-          onClick={clearCanvas}
-          disabled={disabled || strokes.length === 0}
-          className="px-3 py-2 text-xs bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          Clear
-        </button>
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleUndo}
+              disabled={disabled || strokes.length === 0}
+              className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-md hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Undo
+            </button>
+            <button
+              onClick={handleClear}
+              disabled={disabled || strokes.length === 0}
+              className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-md hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Canvas */}

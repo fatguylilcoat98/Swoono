@@ -103,12 +103,12 @@ export default function ConnectFourGame({
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center gap-4">
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-2">
         <TurnBanner game={game} mySide={mySide} />
 
-        <div className="flex flex-col gap-1.5 bg-white/5 border border-white/10 p-3 rounded-xl max-w-md w-full">
+        <div className="flex flex-col gap-1 bg-white/5 border border-white/10 p-2 rounded-xl w-full max-w-sm">
           {Array.from({ length: ROWS }, (_, row) => (
-            <div key={row} className="flex gap-1.5">
+            <div key={row} className="flex gap-1">
               {Array.from({ length: COLS }, (_, col) => {
                 const idx = row * COLS + col;
                 const cell = game.board[idx];

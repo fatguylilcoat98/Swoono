@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRoomStore } from "../../../../state/roomStore";
 import { triggerEffect } from "../../../../lib/registries/effectRegistry";
 import type { GameContextProps } from "../../../../lib/registries/gameRegistry";
@@ -12,8 +12,20 @@ export default function HangmanGame({
 }: GameContextProps) {
   const activeGame = useRoomStore((s) => s.activeGame);
   const guessLetter = useRoomStore((s) => s.guessLetter);
+  const guessWord = useRoomStore((s) => s.guessWord);
   const game =
     activeGame && activeGame.gameId === "hangman" ? activeGame : null;
+
+  const [solveInput, setSolveInput] = useState("");
+  const [showSolve, setShowSolve] = useState(false);
+
+  const handleSolve = () => {
+    const word = solveInput.trim().toLowerCase();
+    if (!word || !/^[a-z]+$/.test(word)) return;
+    guessWord(word);
+    setSolveInput("");
+    setShowSolve(false);
+  };
 
   useEffect(() => {
     if (!game || game.winner === null) return;
@@ -147,6 +159,45 @@ export default function HangmanGame({
             );
           })}
         </div>
+
+        {/* Solve button and input */}
+        {myTurn && game.winner === null && (
+          <div className="flex flex-col items-center gap-2">
+            {!showSolve ? (
+              <button
+                onClick={() => setShowSolve(true)}
+                className="px-4 py-2 text-xs bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-swoono-dim"
+              >
+                Solve Word
+              </button>
+            ) : (
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  value={solveInput}
+                  onChange={(e) => setSolveInput(e.target.value.toLowerCase())}
+                  placeholder="Type the word..."
+                  className="px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-swoono-ink placeholder-swoono-dim/60 focus:outline-none focus:border-swoono-accent/40"
+                  onKeyPress={(e) => e.key === 'Enter' && handleSolve()}
+                  autoFocus
+                />
+                <button
+                  onClick={handleSolve}
+                  disabled={!solveInput.trim()}
+                  className="px-3 py-2 text-xs bg-swoono-accent text-white rounded-lg hover:bg-swoono-accent/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Solve
+                </button>
+                <button
+                  onClick={() => {setShowSolve(false); setSolveInput("");}}
+                  className="px-3 py-2 text-xs bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-swoono-dim"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {game.winner && (
           <p className="text-center text-sm text-swoono-dim mt-2">

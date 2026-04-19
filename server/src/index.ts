@@ -1290,25 +1290,36 @@ function checkHangmanWin(word: string, guessed: string[]): boolean {
 
 function generateDrawingPrompt(): string {
   const prompts = [
-    "A romantic picnic on Mars",
-    "A dancing elephant in a tutu",
-    "Your dream vacation spot",
-    "A superhero made of pizza",
-    "A cat that's also a wizard",
-    "The world's worst haircut",
-    "A house made of candy",
-    "A robot having an existential crisis",
-    "Your partner as a cartoon character",
-    "The last thing you ate, but with arms and legs",
-    "A dinosaur trying to use a smartphone",
-    "The contents of your pocket, but alive",
-    "A tree growing donuts instead of leaves",
-    "A fish giving a business presentation",
-    "Your favorite movie if it was set in space",
-    "A monster that's afraid of the dark",
-    "A cloud with a really bad day",
-    "Your perfect date, but everything is tiny",
-    "A sandwich that's plotting world domination",
+    "A cat wearing sunglasses",
+    "Your dream house",
+    "A happy sun with a face",
+    "A dog driving a car",
+    "Pizza with wings",
+    "A smiling flower",
+    "Your partner as a superhero",
+    "A friendly monster",
+    "A fish with legs",
+    "A dancing banana",
+    "A house on wheels",
+    "A bird wearing a hat",
+    "A laughing cloud",
+    "A tree with eyes",
+    "A car made of cheese",
+    "A flying pig",
+    "A robot cooking dinner",
+    "A singing microphone",
+    "A sleepy moon",
+    "A bouncing ball with arms",
+    "Your favorite food as a person",
+    "A bicycle with butterfly wings",
+    "A smiling toothbrush",
+    "A dancing slice of cake",
+    "A submarine in the sky",
+    "A penguin at the beach",
+    "A cactus wearing shoes",
+    "A rainbow with a face",
+    "A book reading itself",
+    "A clock that's running late",
     "The inside of a vending machine's dreams"
   ];
   return prompts[Math.floor(Math.random() * prompts.length)];
@@ -2209,6 +2220,8 @@ io.on("connection", (socket: Socket) => {
         | "fire"
         | "add-stroke"
         | "ready-for-reveal"
+        | "undo"
+        | "clear"
         | "drop"
         | "reportGameOver"
         | "answer"
@@ -2674,12 +2687,35 @@ io.on("connection", (socket: Socket) => {
           changed = true;
         }
       } else if (game.gameId === "hangman") {
+        const currentPlayer = game.players[game.nextPlayerIdx];
+        if (!currentPlayer || currentPlayer.clientId !== me.clientId) return;
+
+        // Handle word guess (solve attempt)
+        const word = String(payload?.word || "").toLowerCase();
+        if (word && word.length > 1) {
+          if (!/^[a-z]+$/.test(word)) return;
+
+          if (word === game.word.toLowerCase()) {
+            // Correct word guess - win the game
+            game.winner = "win";
+          } else {
+            // Wrong word guess - penalty (treat as 2 wrong letters)
+            game.wrongCount += 2;
+            if (game.wrongCount >= game.maxWrong) {
+              game.winner = "lose";
+            } else {
+              game.nextPlayerIdx =
+                (game.nextPlayerIdx + 1) % game.players.length;
+            }
+          }
+          changed = true;
+          return;
+        }
+
+        // Handle letter guess
         const letter = String(payload?.letter || "").toLowerCase();
         if (!/^[a-z]$/.test(letter)) return;
         if (game.guessedLetters.includes(letter)) return;
-
-        const currentPlayer = game.players[game.nextPlayerIdx];
-        if (!currentPlayer || currentPlayer.clientId !== me.clientId) return;
 
         game.guessedLetters.push(letter);
         if (!game.word.includes(letter)) {
@@ -2713,6 +2749,19 @@ io.on("connection", (socket: Socket) => {
             if (allReady) {
               advanceToReveal(game, room);
             }
+            changed = true;
+          }
+        } else if (action === "undo") {
+          if (game.players[me.clientId] && game.phase === "drawing") {
+            const strokes = game.players[me.clientId].drawing.strokes;
+            if (strokes.length > 0) {
+              strokes.pop(); // Remove the last stroke
+              changed = true;
+            }
+          }
+        } else if (action === "clear") {
+          if (game.players[me.clientId] && game.phase === "drawing") {
+            game.players[me.clientId].drawing.strokes = [];
             changed = true;
           }
         }

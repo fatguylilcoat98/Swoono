@@ -50,6 +50,14 @@ export default function DrawingGame({
     makeDrawingMove("ready-for-reveal");
   };
 
+  const handleUndo = () => {
+    makeDrawingMove("undo");
+  };
+
+  const handleClear = () => {
+    makeDrawingMove("clear");
+  };
+
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -104,6 +112,8 @@ export default function DrawingGame({
             myPlayer={myPlayer}
             onStrokeComplete={handleStrokeComplete}
             onReadyForReveal={handleReadyForReveal}
+            onUndo={handleUndo}
+            onClear={handleClear}
           />
         )}
 
@@ -124,11 +134,15 @@ function DrawingPhase({
   myPlayer,
   onStrokeComplete,
   onReadyForReveal,
+  onUndo,
+  onClear,
 }: {
   game: DrawingGameState;
   myPlayer: DrawingGameState["players"][string];
   onStrokeComplete: (stroke: DrawingStroke) => void;
   onReadyForReveal: () => void;
+  onUndo: () => void;
+  onClear: () => void;
 }) {
   const canMarkReady = game.timeRemaining <= 0 || myPlayer.drawing.strokes.length > 0;
   const allReady = Object.values(game.players).every(p => p.readyForReveal);
@@ -140,6 +154,8 @@ function DrawingPhase({
         <DrawingCanvas
           strokes={myPlayer.drawing.strokes}
           onStrokeComplete={onStrokeComplete}
+          onUndo={onUndo}
+          onClear={onClear}
           disabled={game.timeRemaining <= 0}
         />
       </div>

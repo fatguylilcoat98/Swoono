@@ -20,7 +20,7 @@ import type {
 
 const GRAVITY_Y = 0.6;
 // Blocks per level is enforced server-side (5) — see server/src/index.ts.
-const MAX_PLATFORM_WIDTH = 350;
+const MAX_PLATFORM_WIDTH = 300;
 const PLATFORM_SHRINK_PER_LEVEL = 20;
 const MIN_PLATFORM_WIDTH = 80;
 const PLATFORM_HEIGHT = 25;
@@ -574,7 +574,7 @@ export default function NeonStackerGame({
       <div
         ref={containerRef}
         className="flex-1 relative overflow-hidden rounded-lg border border-white/5 bg-black"
-        style={{ minHeight: 380 }}
+        style={{ minHeight: 320, maxHeight: 480 }}
       >
         <canvas
           ref={canvasRef}
