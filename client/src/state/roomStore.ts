@@ -55,12 +55,7 @@ type RoomState = {
   ) => void;
   fireBattleshipShot: (x: number, y: number) => void;
   makeDrawingMove: (action: "add-stroke" | "ready-for-reveal" | "undo" | "clear", data?: any) => void;
-  dropNeonStackerBlock: (
-    craneX: number,
-    craneTime: number,
-    shape: { width: number; height: number; name: string },
-  ) => void;
-  reportNeonStackerGameOver: () => void;
+  dropNeonStackerBlock: (x: number) => void;
   submitLoveTriviaAnswer: (choice: number) => void;
   submitLoveTriviaSetupPrediction: (qIdx: number, choice: number) => void;
   pickPrompt: (promptType: "truth" | "dare") => void;
@@ -294,17 +289,8 @@ export const useRoomStore = create<RoomState>((set, get) => {
       }
     },
 
-    dropNeonStackerBlock: (craneX, craneTime, shape) => {
-      socket.emit("game:move", {
-        action: "drop",
-        craneX,
-        craneTime,
-        shape,
-      });
-    },
-
-    reportNeonStackerGameOver: () => {
-      socket.emit("game:move", { action: "reportGameOver" });
+    dropNeonStackerBlock: (x) => {
+      socket.emit("game:move", { action: "drop", x });
     },
 
     submitLoveTriviaAnswer: (choice) => {

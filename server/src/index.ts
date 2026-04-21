@@ -1045,21 +1045,20 @@ function pickLoveTriviaQuestions(n: number): LoveTriviaQuestion[] {
   return shuffled.slice(0, n);
 }
 
-// --- Neon Stacker (physics tower, client-simulated, server-arbitrated) ---
+// --- Neon Stacker (classic arcade stacker, server-authoritative) ---
 
-type NeonStackerShape = {
+type NeonStackerBlock = {
+  x: number;
   width: number;
-  height: number;
-  name: string;
+  playerIdx: 0 | 1 | null;
 };
 
-type NeonStackerDrop = {
-  index: number;
-  playerIdx: 0 | 1;
-  craneX: number;
-  craneTime: number;
-  shape: NeonStackerShape;
-  at: number;
+type NeonStackerMoving = {
+  width: number;
+  minX: number;
+  maxX: number;
+  speed: number;
+  startedAt: number;
 };
 
 type NeonStackerState = {
@@ -1068,14 +1067,63 @@ type NeonStackerState = {
     { clientId: string; name: string },
     { clientId: string; name: string },
   ];
+  fieldWidth: number;
+  stack: NeonStackerBlock[];
+  moving: NeonStackerMoving | null;
   nextPlayerIdx: 0 | 1;
-  dropCount: number;
+  dropsInLevel: number;
   level: number;
   playerDropCounts: [number, number];
   winnerIdx: 0 | 1 | null;
-  lastDrop: NeonStackerDrop | null;
+  banner: string | null;
   startedAt: number;
 };
+
+// Playfield constants — all values in logical units; client scales to canvas.
+const NS_FIELD_WIDTH = 600;
+const NS_BASE_PLATFORM_WIDTH = 150;
+const NS_DROPS_PER_LEVEL = 5;
+const NS_BASE_BLOCK_WIDTH = 120;
+const NS_MIN_BLOCK_WIDTH = 40;
+const NS_LEVEL_WIDTH_SHRINK = 10;
+const NS_BASE_SPEED = 220; // units/second
+const NS_SPEED_PER_LEVEL = 35;
+const NS_MAX_SPEED = 520;
+
+function neonStackerBlockWidthForLevel(level: number): number {
+  const w = NS_BASE_BLOCK_WIDTH - (level - 1) * NS_LEVEL_WIDTH_SHRINK;
+  return Math.max(NS_MIN_BLOCK_WIDTH, w);
+}
+
+function neonStackerSpeedForLevel(level: number): number {
+  const s = NS_BASE_SPEED + (level - 1) * NS_SPEED_PER_LEVEL;
+  return Math.min(NS_MAX_SPEED, s);
+}
+
+function neonStackerMakeMoving(
+  width: number,
+  level: number,
+): NeonStackerMoving {
+  const half = width / 2;
+  return {
+    width,
+    minX: half,
+    maxX: NS_FIELD_WIDTH - half,
+    speed: neonStackerSpeedForLevel(level),
+    startedAt: Date.now(),
+  };
+}
+
+/** Deterministic position of the moving block at time `t` (ms). */
+function neonStackerMovingX(m: NeonStackerMoving, t: number): number {
+  const range = m.maxX - m.minX;
+  if (range <= 0) return m.minX;
+  const elapsed = Math.max(0, t - m.startedAt) / 1000;
+  const traveled = elapsed * m.speed;
+  const cycle = range * 2;
+  const phase = traveled - Math.floor(traveled / cycle) * cycle;
+  return phase <= range ? m.minX + phase : m.maxX - (phase - range);
+}
 
 type ActiveGame =
   | TicTacToeState
@@ -2108,18 +2156,29 @@ io.on("connection", (socket: Socket) => {
         }
       }, 1000);
     } else if (gameId === "neon-stacker") {
+      const platform: NeonStackerBlock = {
+        x: NS_FIELD_WIDTH / 2,
+        width: NS_BASE_PLATFORM_WIDTH,
+        playerIdx: null,
+      };
       game = {
         gameId: "neon-stacker",
         players: [
           { clientId: me.clientId, name: me.name },
           { clientId: other.clientId, name: other.name },
         ],
+        fieldWidth: NS_FIELD_WIDTH,
+        stack: [platform],
+        moving: neonStackerMakeMoving(
+          neonStackerBlockWidthForLevel(1),
+          1,
+        ),
         nextPlayerIdx: 0,
-        dropCount: 0,
+        dropsInLevel: 0,
         level: 1,
         playerDropCounts: [0, 0],
         winnerIdx: null,
-        lastDrop: null,
+        banner: null,
         startedAt: Date.now(),
       };
     } else if (gameId === "love-trivia") {
@@ -2639,52 +2698,80 @@ io.on("connection", (socket: Socket) => {
               ? 1
               : null;
         if (myIdx === null) return;
+        if (game.winnerIdx !== null) return;
 
         if (payload?.action === "drop") {
           if (game.nextPlayerIdx !== myIdx) return;
-          const craneX = payload.craneX;
-          const craneTime = payload.craneTime;
-          const shape = payload.shape;
-          if (
-            typeof craneX !== "number" ||
-            typeof craneTime !== "number" ||
-            !shape ||
-            typeof shape.width !== "number" ||
-            typeof shape.height !== "number" ||
-            typeof shape.name !== "string"
-          ) {
-            return;
-          }
-          game.dropCount += 1;
+          if (!game.moving) return;
+
+          // Trust the dropping client's X (clamped to the sweep range).
+          // This avoids a latency penalty where the block would drift
+          // further during the round-trip. The post-drop stack is then
+          // broadcast authoritatively so both clients agree on the
+          // final state — the non-dropping client's pre-drop animation
+          // is purely cosmetic.
+          const reportedX =
+            typeof payload.x === "number" && isFinite(payload.x)
+              ? payload.x
+              : neonStackerMovingX(game.moving, Date.now());
+          const dropX = Math.min(
+            game.moving.maxX,
+            Math.max(game.moving.minX, reportedX),
+          );
+          const dropWidth = game.moving.width;
+          const newLeft = dropX - dropWidth / 2;
+          const newRight = dropX + dropWidth / 2;
+
+          const top = game.stack[game.stack.length - 1];
+          const topLeft = top.x - top.width / 2;
+          const topRight = top.x + top.width / 2;
+
+          const overlapLeft = Math.max(newLeft, topLeft);
+          const overlapRight = Math.min(newRight, topRight);
+          const overlap = overlapRight - overlapLeft;
+
           game.playerDropCounts[myIdx] += 1;
-          // Level up every 5 drops — matches Chris's spec.
-          if (game.dropCount > 0 && game.dropCount % 5 === 0) {
-            game.level += 1;
+
+          if (overlap <= 0) {
+            // Total miss — the dropping player loses.
+            game.winnerIdx = myIdx === 0 ? 1 : 0;
+            game.moving = null;
+            game.banner = "TOWER COLLAPSED";
+            changed = true;
+          } else {
+            game.stack.push({
+              x: (overlapLeft + overlapRight) / 2,
+              width: overlap,
+              playerIdx: myIdx,
+            });
+            game.dropsInLevel += 1;
+
+            let nextWidth = overlap;
+            let banner: string | null = null;
+            if (game.dropsInLevel >= NS_DROPS_PER_LEVEL) {
+              game.level += 1;
+              game.dropsInLevel = 0;
+              banner = `LEVEL ${game.level - 1} COMPLETE`;
+              nextWidth = neonStackerBlockWidthForLevel(game.level);
+            }
+            game.nextPlayerIdx = myIdx === 0 ? 1 : 0;
+            game.moving = neonStackerMakeMoving(nextWidth, game.level);
+            game.banner = banner;
+            if (banner) {
+              // Clear banner after a short delay so it flashes once.
+              const currentCode = room.code;
+              setTimeout(() => {
+                const r = rooms.get(currentCode);
+                if (!r) return;
+                const g = r.game;
+                if (g && g.gameId === "neon-stacker" && g.banner === banner) {
+                  g.banner = null;
+                  emitGameUpdate(r);
+                }
+              }, 1800);
+            }
+            changed = true;
           }
-          game.lastDrop = {
-            index: game.dropCount,
-            playerIdx: myIdx,
-            craneX,
-            craneTime,
-            shape: {
-              width: shape.width,
-              height: shape.height,
-              name: shape.name,
-            },
-            at: Date.now(),
-          };
-          game.nextPlayerIdx = myIdx === 0 ? 1 : 0;
-          changed = true;
-        } else if (payload?.action === "reportGameOver") {
-          // Client-reported game over. The loser is whoever made the
-          // last drop — their block caused the tower to collapse.
-          // Both clients may report concurrently; the winnerIdx guard
-          // below makes this idempotent so only the first one wins.
-          if (game.winnerIdx !== null) return; // already ended
-          if (!game.lastDrop) return;
-          const loserIdx = game.lastDrop.playerIdx;
-          game.winnerIdx = loserIdx === 0 ? 1 : 0;
-          changed = true;
         }
       } else if (game.gameId === "hangman") {
         const currentPlayer = game.players[game.nextPlayerIdx];
