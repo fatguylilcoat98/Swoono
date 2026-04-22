@@ -22,31 +22,12 @@ export default function App() {
   const leave = useRoomStore((s) => s.leave);
   const join = useRoomStore((s) => s.join);
 
-  // Prevent pull-to-refresh on mobile browsers
-  useEffect(() => {
-    document.body.style.overscrollBehavior = 'none';
-
-    let lastY = 0;
-    const preventPullToRefresh = (e: TouchEvent) => {
-      const y = e.touches[0].clientY;
-      if (window.scrollY === 0 && y > lastY) {
-        e.preventDefault();
-      }
-      lastY = y;
-    };
-
-    const handleTouchStart = (e: TouchEvent) => {
-      lastY = e.touches[0].clientY;
-    };
-
-    document.addEventListener('touchstart', handleTouchStart, { passive: false });
-    document.addEventListener('touchmove', preventPullToRefresh, { passive: false });
-
-    return () => {
-      document.removeEventListener('touchstart', handleTouchStart);
-      document.removeEventListener('touchmove', preventPullToRefresh);
-    };
-  }, []);
+  // Pull-to-refresh is blocked by `overscroll-behavior: none` in globals.css —
+  // that's the right layer for it. The previous JS listener attached
+  // preventDefault on document-level touchmove whenever `window.scrollY === 0`,
+  // which also killed scrolling inside inner `.overflow-y-auto` containers
+  // (Memory Thread list, dare history, forecast predictions, etc.) because
+  // the document itself doesn't scroll when an inner element does.
 
   // Auth persistence listener with auto-room loading
   useEffect(() => {
