@@ -389,34 +389,45 @@ async function testNeonStacker(p1, p2) {
     (g) => g?.gameId === "neon-stacker",
   );
   assert(started.nextPlayerIdx === 0, "first turn should be p0");
-  // Do 3 drops, alternating
+  assert(started.stack.length === 1, "should start with platform only");
+  assert(started.moving !== null, "should have a moving block");
+
+  // Do 3 drops, alternating. X matches the platform center so overlap
+  // is always solid and nobody loses yet.
   let current = started;
-  const shape = { width: 70, height: 70, name: "square" };
+  const platformX = started.stack[0].x;
   for (let i = 0; i < 3; i++) {
     const turnSock = current.nextPlayerIdx === 0 ? p1 : p2;
-    const prevDropCount = current.dropCount;
-    turnSock.emit("game:move", {
-      action: "drop",
-      craneX: 200,
-      craneTime: i * 0.5,
-      shape,
-    });
+    const prevStackLen = current.stack.length;
+    turnSock.emit("game:move", { action: "drop", x: platformX });
     current = await waitForGameState(
       p1,
-      (g) => g?.dropCount > prevDropCount,
+      (g) => g?.stack?.length > prevStackLen || g?.winnerIdx !== null,
+    );
+    assert(
+      current.winnerIdx === null,
+      `unexpected game over on drop ${i + 1}`,
     );
   }
-  assert(current.dropCount === 3, `expected dropCount=3, got ${current.dropCount}`);
-  // Verify nextPlayerIdx alternates correctly — after 3 drops starting
-  // from idx 0, the next player should be idx 1
+  assert(
+    current.stack.length === 4,
+    `expected stack=4 (1 platform + 3 drops), got ${current.stack.length}`,
+  );
   assert(
     current.nextPlayerIdx === 1,
     `expected nextPlayerIdx=1 after 3 drops, got ${current.nextPlayerIdx}`,
   );
-  // Report game-over from whoever dropped last
-  p1.emit("game:move", { action: "reportGameOver" });
+
+  // Now force a miss — drop way off the platform.
+  const turnSock = current.nextPlayerIdx === 0 ? p1 : p2;
+  turnSock.emit("game:move", { action: "drop", x: -9999 });
   const final = await waitForGameState(p1, (g) => g?.winnerIdx !== null);
-  assert(final.winnerIdx !== null, "should have a winner after gameOver");
+  assert(final.winnerIdx !== null, "should have a winner after miss");
+  // The dropping player loses.
+  assert(
+    final.winnerIdx !== current.nextPlayerIdx,
+    `loser should be the dropping player, got winner=${final.winnerIdx}`,
+  );
   p1.emit("game:exit");
   await new Promise((r) => setTimeout(r, 200));
 }

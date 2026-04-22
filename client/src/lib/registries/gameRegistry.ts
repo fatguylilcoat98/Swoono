@@ -142,7 +142,7 @@ registerGame({
   id: "neon-stacker",
   name: "Neon Stacker",
   category: "arcade",
-  description: "Physics tower builder. Stack blocks, rotate levels, don't let it fall.",
+  description: "Classic arcade stacker. Time the drop, keep the tower alive, survive each level.",
   emoji: "🧱",
   tier: 0,
   pointsOnWin: 20,

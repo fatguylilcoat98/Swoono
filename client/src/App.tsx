@@ -44,7 +44,19 @@ export default function App() {
           )}
         </AnimatePresence>
         <EffectOverlay />
+        <VersionBadge />
       </div>
     </ThemeProvider>
+  );
+}
+
+function VersionBadge() {
+  return (
+    <div
+      className="fixed bottom-1.5 right-2 z-50 text-[10px] font-mono text-swoono-dim/60 pointer-events-none select-none tracking-wider"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+    >
+      v{__APP_VERSION__}
+    </div>
   );
 }
