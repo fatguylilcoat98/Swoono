@@ -11,6 +11,11 @@ import SpicyZoneGame from "../../components/games/modules/spicy-zone/SpicyZoneGa
 import LovingQuestGame from "../../components/games/modules/loving-quest/LovingQuestGame";
 import WordChainGame from "../../components/games/modules/word-chain/WordChainGame";
 import TriviaGame from "../../components/games/modules/trivia/TriviaGame";
+import TugOfWarGame from "../../components/games/modules/tug-of-war/TugOfWarGame";
+import MemoryThreadGame from "../../components/games/modules/memory-thread/MemoryThreadGame";
+import DailyDareChainGame from "../../components/games/modules/daily-dare-chain/DailyDareChainGame";
+import FutureForecastGame from "../../components/games/modules/future-forecast/FutureForecastGame";
+import CarePackageGame from "../../components/games/modules/care-package/CarePackageGame";
 
 export type GameCategory = "arcade" | "couples";
 
@@ -211,4 +216,66 @@ registerGame({
   pointsOnWin: 25,
   status: "ready",
   component: SpicyZoneGame,
+});
+
+// --- New Games ---
+
+registerGame({
+  id: "tug-of-war",
+  name: "Tug of War",
+  category: "arcade",
+  description: "Real-time tapping battle! First to 80% wins, or most pulls in 30 seconds.",
+  emoji: "🪢",
+  tier: 0,
+  pointsOnWin: 15,
+  status: "ready",
+  component: TugOfWarGame,
+});
+
+registerGame({
+  id: "memory-thread",
+  name: "Memory Thread",
+  category: "couples",
+  description: "Build your shared history one memory at a time. Drop a prompt, partner replies.",
+  emoji: "📖",
+  tier: 0,
+  pointsOnWin: 0, // No points, collaborative
+  status: "ready",
+  component: MemoryThreadGame,
+});
+
+registerGame({
+  id: "daily-dare-chain",
+  name: "Daily Dare Chain",
+  category: "couples",
+  description: "One dare per day. Escalating tiers. Chain builds until both skip 3 times.",
+  emoji: "⛓️",
+  tier: 1,
+  pointsOnWin: 0, // No points, relationship building
+  status: "ready",
+  component: DailyDareChainGame,
+});
+
+registerGame({
+  id: "future-forecast",
+  name: "Future Forecast",
+  category: "couples",
+  description: "Weekly predictions about each other. Submit independently, reveal together.",
+  emoji: "🔮",
+  tier: 0,
+  pointsOnWin: 0, // No points, insight building
+  status: "ready",
+  component: FutureForecastGame,
+});
+
+registerGame({
+  id: "care-package",
+  name: "Care Package",
+  category: "couples",
+  description: "Send encouragement packages with delayed delivery. Create when inspired.",
+  emoji: "📦",
+  tier: 1,
+  pointsOnWin: 0, // No points, emotional support
+  status: "ready",
+  component: CarePackageGame,
 });

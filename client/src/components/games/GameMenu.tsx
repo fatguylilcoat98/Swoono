@@ -6,6 +6,7 @@ import {
   type GameDefinition,
 } from "../../lib/registries/gameRegistry";
 import { useRoomStore } from "../../state/roomStore";
+import DailyPrompt from "./DailyPrompt";
 
 const TABS: { id: GameCategory; label: string }[] = [
   { id: "arcade", label: "Arcade" },
@@ -14,10 +15,13 @@ const TABS: { id: GameCategory; label: string }[] = [
 
 export default function GameMenu() {
   const [activeTab, setActiveTab] = useState<GameCategory>("arcade");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const games = getGamesByCategory(activeTab);
   const startGame = useRoomStore((s) => s.startGame);
   const activeGame = useRoomStore((s) => s.activeGame);
   const gameInProgress = activeGame !== null;
+  const roomCode = useRoomStore((s) => s.code);
+  const clientId = useRoomStore((s) => s.clientId);
 
   return (
     <GlassPanel className="p-5">
@@ -48,6 +52,11 @@ export default function GameMenu() {
         })}
       </div>
 
+      {/* Daily Prompt - Top of Couples Tab */}
+      {activeTab === "couples" && roomCode && (
+        <DailyPrompt roomCode={roomCode} selfClientId={clientId} />
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         {games.map((g) => (
           <GameCard
@@ -55,6 +64,7 @@ export default function GameMenu() {
             game={g}
             disabled={gameInProgress}
             onPlay={() => startGame(g.id)}
+            onUpgrade={() => setShowUpgradeModal(true)}
           />
         ))}
       </div>
@@ -63,6 +73,34 @@ export default function GameMenu() {
         Game modules plug into{" "}
         <code className="text-swoono-dim">gameRegistry</code>.
       </p>
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+          <div className="max-w-md w-full bg-swoono-bg border border-white/15 rounded-2xl p-6">
+            <div className="text-center">
+              <div className="text-4xl mb-4">🔓</div>
+              <h3 className="font-display text-xl text-swoono-ink mb-3">
+                Upgrade to Pro
+              </h3>
+              <p className="text-swoono-dim mb-6 leading-relaxed">
+                Unlock premium games, unlimited memory threads, scheduled care packages, and custom dares.
+              </p>
+              <div className="space-y-3">
+                <button className="w-full py-3 bg-swoono-accent text-black font-semibold rounded-lg hover:bg-swoono-accent/80 transition-colors">
+                  Upgrade Now
+                </button>
+                <button
+                  onClick={() => setShowUpgradeModal(false)}
+                  className="w-full py-2 text-swoono-dim hover:text-swoono-ink transition-colors"
+                >
+                  Maybe Later
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </GlassPanel>
   );
 }
@@ -71,36 +109,53 @@ function GameCard({
   game,
   disabled,
   onPlay,
+  onUpgrade,
 }: {
   game: GameDefinition;
   disabled: boolean;
   onPlay: () => void;
+  onUpgrade: () => void;
 }) {
   const locked = game.tier > 0;
   const available = game.status === "ready" && !locked && !disabled;
+  const clickHandler = () => {
+    if (available) {
+      onPlay();
+    } else if (locked && game.status === "ready" && !disabled) {
+      onUpgrade();
+    }
+  };
+
   return (
     <button
       type="button"
-      disabled={!available}
-      onClick={available ? onPlay : undefined}
+      onClick={clickHandler}
       title={game.description}
       className={`text-left rounded-xl p-3 border transition-all ${
         available
           ? "bg-white/5 border-white/10 hover:bg-white/10 hover:border-swoono-accent/40"
-          : "bg-white/[0.02] border-white/5 cursor-not-allowed opacity-70"
+          : locked && game.status === "ready" && !disabled
+            ? "bg-white/5 border-amber-500/20 hover:bg-white/10 hover:border-amber-500/40 cursor-pointer"
+            : "bg-white/[0.02] border-white/5 cursor-not-allowed opacity-70"
       }`}
     >
-      <div className="text-2xl leading-none mb-2">{game.emoji}</div>
+      <div className="flex justify-between items-start mb-2">
+        <div className="text-2xl leading-none">{game.emoji}</div>
+        {game.tier === 0 ? (
+          <span className="bg-green-500/20 text-green-400 text-[9px] uppercase tracking-wider font-semibold px-2 py-1 rounded">
+            FREE
+          </span>
+        ) : (
+          <span className="bg-amber-500/20 text-amber-400 text-[9px] uppercase tracking-wider font-semibold px-2 py-1 rounded flex items-center gap-1">
+            🔒 PRO
+          </span>
+        )}
+      </div>
       <div className="text-sm text-swoono-ink leading-tight">{game.name}</div>
-      <div className="mt-1 flex items-center gap-1">
+      <div className="mt-1">
         <span className="text-[9px] uppercase tracking-wider text-swoono-dim/70">
           {game.status === "ready" ? "Playable" : "Soon"}
         </span>
-        {locked && (
-          <span className="text-[9px] uppercase tracking-wider text-swoono-accent2/80">
-            · Tier {game.tier}
-          </span>
-        )}
       </div>
     </button>
   );
