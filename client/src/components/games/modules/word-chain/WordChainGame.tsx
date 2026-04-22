@@ -22,6 +22,9 @@ export default function WordChainGame({
   const [input, setInput] = useState("");
   const [awarded, setAwarded] = useState(false);
   const [localError, setLocalError] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [invalidAttempts, setInvalidAttempts] = useState(0);
 
   const myIdx: 0 | 1 | null = game
     ? game.players[0].clientId === selfClientId
@@ -31,12 +34,48 @@ export default function WordChainGame({
         : null
     : null;
   const myTurn = game && myIdx !== null && game.turnIdx === myIdx;
+  const opponent = game?.players[myIdx === 0 ? 1 : 0];
+  const done = game?.winnerIdx !== null;
 
-  // Clear input + error when turn flips
+  // Timer countdown
+  useEffect(() => {
+    if (!myTurn || done || timeLeft <= 0) return;
+
+    const timer = setTimeout(() => {
+      if (timeLeft > 1) {
+        setTimeLeft(timeLeft - 1);
+      } else {
+        // Time's up - forfeit
+        setLocalError("Time's up!");
+        setTimeout(() => {
+          forfeit();
+        }, 1000);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [timeLeft, myTurn, done, forfeit]);
+
+  // Clear input + error when turn flips, reset timer
   useEffect(() => {
     setInput("");
     setLocalError("");
+    setTimeLeft(30);
+    setInvalidAttempts(0);
   }, [game?.turnIdx, game?.history.length]);
+
+  // Dictionary validation
+  const checkWord = async (word: string): Promise<boolean> => {
+    try {
+      const res = await fetch(
+        `https://api.dictionaryapi.dev/api/v2/entries/en/${word}`
+      );
+      return res.ok;
+    } catch {
+      // If API fails, accept the word
+      return true;
+    }
+  };
 
   useEffect(() => {
     if (!game || game.winnerIdx === null || awarded) return;
@@ -65,10 +104,8 @@ export default function WordChainGame({
     );
   }
 
-  const opponent = game.players[myIdx === 0 ? 1 : 0];
-  const done = game.winnerIdx !== null;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const raw = input.trim().toLowerCase();
     if (!raw) return;
     if (raw.length < 2) {
@@ -87,6 +124,42 @@ export default function WordChainGame({
       setLocalError("Already used");
       return;
     }
+
+    // Dictionary validation
+    setValidating(true);
+    const isValid = await checkWord(raw);
+    setValidating(false);
+
+    if (!isValid) {
+      const newAttempts = invalidAttempts + 1;
+      setInvalidAttempts(newAttempts);
+
+      if (newAttempts >= 3) {
+        setLocalError("Too many invalid words - you lose!");
+        setTimeout(() => {
+          forfeit();
+        }, 1500);
+      } else {
+        setLocalError(`"${raw}" is not a real word! ${3 - newAttempts} attempts left`);
+      }
+      return;
+    }
+
+    // Check win condition - 20 words reached
+    if (game.history.length >= 19) { // Will be 20 after this word
+      setLocalError("🎉 Chain complete! Both players win!");
+      setTimeout(() => {
+        // Award points to both players
+        onAwardPoints(25, "Word Chain completion");
+        triggerEffect({
+          effectId: "effect.game.win",
+          fromClientId: selfClientId,
+        });
+        onExit();
+      }, 2000);
+      return;
+    }
+
     setLocalError("");
     submitWord(raw);
   };
@@ -97,6 +170,8 @@ export default function WordChainGame({
         <div>
           <h2 className="font-display text-2xl text-swoono-ink">Word Chain</h2>
           <p className="text-swoono-dim text-xs uppercase tracking-widest mt-1">
+            🌍 Long Distance Edition
+            {" · "}
             {done
               ? game.winnerIdx === myIdx
                 ? "You won"
@@ -116,9 +191,19 @@ export default function WordChainGame({
         </button>
       </div>
 
-      <div className="flex items-center justify-center text-xs uppercase tracking-widest text-swoono-dim mb-4">
-        Words in chain:{" "}
-        <span className="text-swoono-accent ml-2">{game.history.length}</span>
+      <div className="flex items-center justify-center gap-6 text-xs uppercase tracking-widest text-swoono-dim mb-4">
+        <div>
+          Words in chain:{" "}
+          <span className="text-swoono-accent ml-1">{game.history.length}/20</span>
+        </div>
+        {!done && myTurn && (
+          <div className="flex items-center gap-2">
+            Time:{" "}
+            <span className={`ml-1 font-bold ${timeLeft <= 10 ? 'text-red-400' : 'text-swoono-accent'}`}>
+              {timeLeft}s
+            </span>
+          </div>
+        )}
       </div>
 
       {!done && (
@@ -205,10 +290,10 @@ export default function WordChainGame({
             />
             <button
               onClick={handleSubmit}
-              disabled={!myTurn || !input.trim()}
+              disabled={!myTurn || !input.trim() || validating}
               className="px-5 py-3 bg-swoono-accent text-black font-semibold uppercase tracking-widest text-xs rounded disabled:opacity-30"
             >
-              Play
+              {validating ? "Checking..." : "Play"}
             </button>
           </div>
           {localError && (
