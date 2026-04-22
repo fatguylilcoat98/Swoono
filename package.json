@@ -1,7 +1,7 @@
 {
   "name": "swoono",
   "private": true,
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "A synced shared room for two people",
   "workspaces": [
     "client",
@@ -12,7 +12,8 @@
     "dev:server": "npm run dev -w server",
     "build": "npm run build -w client && npm run build -w server",
     "start": "npm start -w server",
-    "test:games": "node scripts/test-games.mjs"
+    "test:games": "node scripts/test-games.mjs",
+    "version-bump": "node bump-version.js"
   },
   "engines": {
     "node": ">=20"
