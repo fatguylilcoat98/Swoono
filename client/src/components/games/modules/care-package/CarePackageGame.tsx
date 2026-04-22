@@ -36,7 +36,9 @@ export default function CarePackageGame({
   const [packagesThisMonth, setPackagesThisMonth] = useState(0);
 
   const emojiOptions = ["❤️", "🌟", "🎉", "☀️", "🌈", "💐", "🍰", "🎁", "🧸", "💌", "🌙", "✨"];
-  const isPremium = false; // TODO: Get from user state
+  // TESTER MODE — bypasses all paywalls
+  const TESTER_MODE = import.meta.env.VITE_TESTER_MODE === 'true';
+  const isPremium = TESTER_MODE; // TODO: Get from user state when not testing
   const monthlyLimit = 3;
 
   // Load packages on mount

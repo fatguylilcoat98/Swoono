@@ -127,7 +127,10 @@ function GameCard({
   onPlay: () => void;
   onUpgrade: () => void;
 }) {
-  const locked = game.tier > 0;
+  // TESTER MODE — bypasses all paywalls
+  // Set VITE_TESTER_MODE=true in .env to unlock all
+  const TESTER_MODE = import.meta.env.VITE_TESTER_MODE === 'true';
+  const locked = game.tier > 0 && !TESTER_MODE;
   const available = game.status === "ready" && !locked && !disabled;
   const clickHandler = () => {
     if (available) {
@@ -152,9 +155,9 @@ function GameCard({
     >
       <div className="flex justify-between items-start mb-2">
         <div className="text-2xl leading-none">{game.emoji}</div>
-        {game.tier === 0 ? (
+        {game.tier === 0 || TESTER_MODE ? (
           <span className="bg-green-500/20 text-green-400 text-[9px] uppercase tracking-wider font-semibold px-2 py-1 rounded">
-            FREE
+            {TESTER_MODE && game.tier > 0 ? "TEST" : "FREE"}
           </span>
         ) : (
           <span className="bg-amber-500/20 text-amber-400 text-[9px] uppercase tracking-wider font-semibold px-2 py-1 rounded flex items-center gap-1">

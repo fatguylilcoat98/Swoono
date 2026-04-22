@@ -32,6 +32,9 @@ export default function MemoryThreadGame({
   const [newMemoryText, setNewMemoryText] = useState("");
   const [selectedEmoji, setSelectedEmoji] = useState("💭");
 
+  // TESTER MODE — bypasses all paywalls
+  const TESTER_MODE = import.meta.env.VITE_TESTER_MODE === 'true';
+
   const emojis = ["💭", "❤️", "😊", "🌟", "🎉", "💑", "🏠", "🌸", "☀️", "🌙", "🎈", "💫"];
 
   // Load threads on mount
@@ -200,7 +203,7 @@ export default function MemoryThreadGame({
         <div className="w-1/3 p-5 border-r border-white/10">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm uppercase tracking-widest text-swoono-dim">Threads</h3>
-            {threads.length < 3 && ( // Free limit
+            {(threads.length < 3 || TESTER_MODE) && ( // Free limit (bypassed in tester mode)
               <button
                 onClick={createThread}
                 className="text-xs bg-swoono-accent/20 text-swoono-accent px-3 py-1 rounded hover:bg-swoono-accent/30 transition-colors"
@@ -252,7 +255,7 @@ export default function MemoryThreadGame({
                 </button>
               ))}
 
-              {threads.length >= 3 && (
+              {threads.length >= 3 && !TESTER_MODE && (
                 <div className="text-center py-4 text-xs text-swoono-dim/70 border border-amber-500/30 bg-amber-500/10 rounded-lg">
                   <div className="text-amber-400 mb-1">🔒 Free Limit Reached</div>
                   Upgrade for unlimited threads

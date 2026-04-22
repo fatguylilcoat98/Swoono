@@ -74,7 +74,9 @@ export default function DailyDareChainGame({
   }
 
   const state = gameState.game_state as DailyDareState;
-  const isPremium = state.is_premium || false;
+  // TESTER MODE — bypasses all paywalls
+  const TESTER_MODE = import.meta.env.VITE_TESTER_MODE === 'true';
+  const isPremium = state.is_premium || TESTER_MODE;
 
   const sendDare = async (tier: DareTier, dareText?: string) => {
     const dares = tier === 'easy' ? EASY_DARES : tier === 'medium' ? MEDIUM_DARES : SPICY_DARES;
