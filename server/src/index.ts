@@ -1841,6 +1841,17 @@ function emitGameUpdate(room: Room) {
 }
 
 const app = express();
+
+// Add raw body parser for Stripe webhook before other middleware
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+
+// Add JSON middleware for other routes
+app.use(express.json());
+
+// Import and mount Stripe routes
+import stripeRouter from './routes/stripe';
+app.use('/api/stripe', stripeRouter);
+
 const server = http.createServer(app);
 
 const io = new Server(server, {

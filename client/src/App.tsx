@@ -7,6 +7,7 @@ import ModeSelector from "./components/theme/ModeSelector";
 import ThemeProvider from "./components/theme/ThemeProvider";
 import EffectOverlay from "./components/effects/EffectOverlay";
 import TestingPanel from "./components/testing/TestingPanel";
+import InstallPrompt from "./components/ui/InstallPrompt";
 import { useRoomStore } from "./state/roomStore";
 import { useThemeStore } from "./state/themeStore";
 import { getSupabase } from "./lib/supabase";
@@ -90,6 +91,7 @@ export default function App() {
         </AnimatePresence>
         <EffectOverlay />
         <TestingPanel />
+        <InstallPrompt />
         <VersionBadge />
       </div>
     </ThemeProvider>
