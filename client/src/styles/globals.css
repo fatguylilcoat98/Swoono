@@ -12,11 +12,13 @@ body,
   min-height: 100%;
 }
 
-/* Kill pull-to-refresh globally */
-html, body {
-  overscroll-behavior: none;
-  overscroll-behavior-y: none;
-  -webkit-overflow-scrolling: touch;
+/* Kill pull-to-refresh on mobile only */
+@media (max-width: 768px) {
+  html, body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* ------------------------------------------------------------------------- *
@@ -65,7 +67,6 @@ body {
   background: rgb(var(--swoono-bg));
   color: rgb(var(--swoono-ink));
   -webkit-font-smoothing: antialiased;
-  overscroll-behavior: auto;
   font-family: Inter, system-ui, sans-serif;
   transition: background-color 0.6s ease;
 }
@@ -148,10 +149,12 @@ body {
   }
 }
 
-/* Prevent horizontal scrolling on mobile */
-html, body {
-  overflow-x: hidden;
-  width: 100%;
+/* Prevent horizontal scrolling on mobile only */
+@media (max-width: 768px) {
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+  }
 }
 
 /* Improve game board touch handling */
