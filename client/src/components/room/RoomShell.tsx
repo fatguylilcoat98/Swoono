@@ -149,7 +149,7 @@ export default function RoomShell({ onLeave }: RoomShellProps) {
             )}
           </section>
 
-          <aside className="flex flex-col gap-5">
+          <aside className="flex flex-col gap-5 overflow-y-auto max-h-screen">
             <GameMenu />
             <RewardsPanel />
             <LeaderboardPanel />

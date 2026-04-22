@@ -24,7 +24,7 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      <div className="h-dvh bg-swoono-bg text-swoono-ink font-sans antialiased overflow-hidden">
+      <div className="min-h-dvh bg-swoono-bg text-swoono-ink font-sans antialiased">
         <AnimatePresence mode="wait">
           {stage === "mode" && (
             <ModeSelector key="mode" onDone={() => setStage("landing")} />
