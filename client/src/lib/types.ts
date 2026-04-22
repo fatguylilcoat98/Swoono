@@ -390,6 +390,74 @@ export type NeonStackerState = {
   startedAt: number;
 };
 
+// --- New games (server-side handlers added 2026-04-22) ---
+
+export type TugOfWarState = {
+  gameId: "tug-of-war";
+  players: [string, string];
+  status: "active" | "finished";
+  currentPlayer: string;
+  position: number;
+  winner: string | null;
+  startedAt: number;
+};
+
+export type MemoryThreadEntry = {
+  author: string;
+  text: string;
+  timestamp: number;
+};
+
+export type MemoryThreadState = {
+  gameId: "memory-thread";
+  players: [string, string];
+  status: "active";
+  entries: MemoryThreadEntry[];
+  winner: null;
+  startedAt: number;
+};
+
+export type DareEntry = {
+  author: string;
+  text: string;
+  status: "pending" | "completed" | "skipped";
+  timestamp: number;
+};
+
+export type DailyDareChainState = {
+  gameId: "daily-dare-chain";
+  players: [string, string];
+  status: "active";
+  dares: DareEntry[];
+  currentDare: { author: string; text: string; idx: number } | null;
+  winner: null;
+  startedAt: number;
+};
+
+export type FutureForecastState = {
+  gameId: "future-forecast";
+  players: [string, string];
+  status: "active";
+  question: string;
+  predictions: Record<string, string>;
+  votes: Record<string, string>;
+  revealed: boolean;
+  winner: string | null;
+  startedAt: number;
+};
+
+export type CarePackageType = "encouragement" | "love" | "support" | "surprise";
+
+export type CarePackageState = {
+  gameId: "care-package";
+  players: [string, string];
+  status: "active";
+  package: { sender: string; type: CarePackageType; message: string } | null;
+  opened: boolean;
+  winner: null;
+  startedAt: number;
+};
+
 /** Union of all game state shapes. Add new games here as they land. */
 export type ActiveGame =
   | TicTacToeState
@@ -402,6 +470,11 @@ export type ActiveGame =
   | PromptGameState
   | LovingQuestState
   | WordChainState
+  | TugOfWarState
+  | MemoryThreadState
+  | DailyDareChainState
+  | FutureForecastState
+  | CarePackageState
   | TriviaState;
 
 // --- Production utility types ---------------------------------------------

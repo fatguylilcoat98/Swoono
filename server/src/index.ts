@@ -1125,6 +1125,96 @@ function neonStackerMovingX(m: NeonStackerMoving, t: number): number {
   return phase <= range ? m.minX + phase : m.maxX - (phase - range);
 }
 
+// --- New games added 2026-04-22 (tug-of-war, memory-thread, daily-dare-chain,
+// future-forecast, care-package). Client modules were rewritten to emit
+// Socket.IO events in commit 95840a3, but server handlers were missing —
+// those emits silently dropped. These types + handlers close that gap.
+
+type TugOfWarState = {
+  gameId: "tug-of-war";
+  players: [string, string];             // [clientIdP1, clientIdP2]
+  status: "active" | "finished";
+  currentPlayer: string;                 // clientId whose turn it is
+  position: number;                      // -5 (P2 wins) .. +5 (P1 wins)
+  winner: string | null;                 // clientId of winner, null otherwise
+  startedAt: number;
+};
+
+type MemoryThreadEntry = {
+  author: string;                        // clientId
+  text: string;
+  timestamp: number;
+};
+
+type MemoryThreadState = {
+  gameId: "memory-thread";
+  players: [string, string];
+  status: "active";
+  entries: MemoryThreadEntry[];
+  winner: null;                          // collaborative — never has a winner
+  startedAt: number;
+};
+
+type DareEntry = {
+  author: string;                        // clientId of whoever sent the dare
+  text: string;
+  status: "pending" | "completed" | "skipped";
+  timestamp: number;
+};
+
+type DailyDareChainState = {
+  gameId: "daily-dare-chain";
+  players: [string, string];
+  status: "active";
+  dares: DareEntry[];
+  currentDare: { author: string; text: string; idx: number } | null;
+  winner: null;                          // relationship-building; no winner
+  startedAt: number;
+};
+
+type FutureForecastState = {
+  gameId: "future-forecast";
+  players: [string, string];
+  status: "active";
+  question: string;
+  predictions: Record<string, string>;   // clientId → prediction text
+  votes: Record<string, string>;         // voter clientId → voted-for clientId
+  revealed: boolean;
+  winner: string | null;                 // clientId of majority-vote winner
+  startedAt: number;
+};
+
+type CarePackageType = "encouragement" | "love" | "support" | "surprise";
+
+type CarePackageState = {
+  gameId: "care-package";
+  players: [string, string];
+  status: "active";
+  package: { sender: string; type: CarePackageType; message: string } | null;
+  opened: boolean;
+  winner: null;                          // not a competitive game
+  startedAt: number;
+};
+
+const FORECAST_QUESTIONS: string[] = [
+  "Where will we be living 5 years from now?",
+  "What's the next big adventure we'll take together?",
+  "What habit of ours will we look back on and laugh at?",
+  "What skill will one of us have picked up a year from now?",
+  "What will our favorite shared memory from this year end up being?",
+  "Who will text first tomorrow morning?",
+  "What's the next pet we'll talk about getting?",
+  "What's the next argument we'll have — and who's right?",
+  "Which of our friends will get engaged next?",
+  "What show will we binge together next?",
+];
+
+function pickForecastQuestion(): string {
+  return FORECAST_QUESTIONS[
+    Math.floor(Math.random() * FORECAST_QUESTIONS.length)
+  ];
+}
+
 type ActiveGame =
   | TicTacToeState
   | ConnectFourState
@@ -1136,7 +1226,12 @@ type ActiveGame =
   | PromptGameState
   | LovingQuestState
   | WordChainState
-  | TriviaState;
+  | TriviaState
+  | TugOfWarState
+  | MemoryThreadState
+  | DailyDareChainState
+  | FutureForecastState
+  | CarePackageState;
 
 type Room = {
   code: string;
@@ -1556,6 +1651,13 @@ function isGameOver(game: ActiveGame): boolean {
   if (game.gameId === "truth-or-dare") return game.winner !== null;
   if (game.gameId === "spicy-zone") return game.winner !== null;
   if (game.gameId === "loving-quest") return game.winner !== null;
+  if (game.gameId === "tug-of-war") return game.status === "finished";
+  // memory-thread, daily-dare-chain, care-package are open-ended —
+  // they end only when a player exits (handled by room teardown).
+  if (game.gameId === "memory-thread") return false;
+  if (game.gameId === "daily-dare-chain") return false;
+  if (game.gameId === "care-package") return false;
+  if (game.gameId === "future-forecast") return game.winner !== null;
   return game.winner !== null;
 }
 
@@ -2270,6 +2372,57 @@ io.on("connection", (socket: Socket) => {
         winnerIdx: null,
         startedAt: Date.now(),
       };
+    } else if (gameId === "tug-of-war") {
+      game = {
+        gameId: "tug-of-war",
+        players: [me.clientId, other.clientId],
+        status: "active",
+        currentPlayer: me.clientId,        // initiator pulls first
+        position: 0,
+        winner: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "memory-thread") {
+      game = {
+        gameId: "memory-thread",
+        players: [me.clientId, other.clientId],
+        status: "active",
+        entries: [],
+        winner: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "daily-dare-chain") {
+      game = {
+        gameId: "daily-dare-chain",
+        players: [me.clientId, other.clientId],
+        status: "active",
+        dares: [],
+        currentDare: null,
+        winner: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "future-forecast") {
+      game = {
+        gameId: "future-forecast",
+        players: [me.clientId, other.clientId],
+        status: "active",
+        question: pickForecastQuestion(),
+        predictions: {},
+        votes: {},
+        revealed: false,
+        winner: null,
+        startedAt: Date.now(),
+      };
+    } else if (gameId === "care-package") {
+      game = {
+        gameId: "care-package",
+        players: [me.clientId, other.clientId],
+        status: "active",
+        package: null,
+        opened: false,
+        winner: null,
+        startedAt: Date.now(),
+      };
     } else {
       return; // unknown game id
     }
@@ -2862,6 +3015,149 @@ io.on("connection", (socket: Socket) => {
             game.players[me.clientId].drawing.strokes = [];
             changed = true;
           }
+        }
+      } else if (game.gameId === "tug-of-war") {
+        // Pull the rope toward current player's side. Turn alternates.
+        // P1 is game.players[0] — pulling moves position toward +5.
+        // P2 is game.players[1] — pulling moves position toward -5.
+        const type = (payload as any)?.type;
+        if (type !== "pull") return;
+        if (game.status !== "active") return;
+        if (game.currentPlayer !== me.clientId) return;
+
+        const isP1 = game.players[0] === me.clientId;
+        const isP2 = game.players[1] === me.clientId;
+        if (!isP1 && !isP2) return;
+
+        game.position = Math.max(
+          -5,
+          Math.min(5, game.position + (isP1 ? 1 : -1)),
+        );
+        if (game.position >= 5) {
+          game.winner = game.players[0];
+          game.status = "finished";
+        } else if (game.position <= -5) {
+          game.winner = game.players[1];
+          game.status = "finished";
+        } else {
+          game.currentPlayer = isP1 ? game.players[1] : game.players[0];
+        }
+        changed = true;
+      } else if (game.gameId === "memory-thread") {
+        const type = (payload as any)?.type;
+        if (type !== "add_entry") return;
+        const raw = (payload as any)?.text;
+        const text = sanitizeString(typeof raw === "string" ? raw : "", 200);
+        if (!text) return;
+        if (!game.players.includes(me.clientId)) return;
+
+        game.entries.push({
+          author: me.clientId,
+          text,
+          timestamp: Date.now(),
+        });
+        // Cap history so a long-running room doesn't grow unbounded.
+        if (game.entries.length > 500) {
+          game.entries = game.entries.slice(-500);
+        }
+        changed = true;
+      } else if (game.gameId === "daily-dare-chain") {
+        const type = (payload as any)?.type;
+        if (!game.players.includes(me.clientId)) return;
+
+        if (type === "send_dare") {
+          if (game.currentDare) return;   // one dare in flight at a time
+          const raw = (payload as any)?.text;
+          const text = sanitizeString(typeof raw === "string" ? raw : "", 200);
+          if (!text) return;
+          const idx = game.dares.length;
+          game.dares.push({
+            author: me.clientId,
+            text,
+            status: "pending",
+            timestamp: Date.now(),
+          });
+          game.currentDare = { author: me.clientId, text, idx };
+          changed = true;
+        } else if (type === "complete_dare" || type === "skip_dare") {
+          if (!game.currentDare) return;
+          // Only the receiver (non-author) can resolve the dare.
+          if (game.currentDare.author === me.clientId) return;
+          const idx = game.currentDare.idx;
+          if (idx < 0 || idx >= game.dares.length) return;
+          game.dares[idx].status =
+            type === "complete_dare" ? "completed" : "skipped";
+          game.currentDare = null;
+          changed = true;
+        }
+      } else if (game.gameId === "future-forecast") {
+        const type = (payload as any)?.type;
+        if (!game.players.includes(me.clientId)) return;
+
+        if (type === "submit_prediction") {
+          if (game.revealed) return;      // no changes after reveal
+          if (game.predictions[me.clientId]) return;   // one per player
+          const raw = (payload as any)?.text;
+          const text = sanitizeString(typeof raw === "string" ? raw : "", 150);
+          if (!text) return;
+          game.predictions[me.clientId] = text;
+          changed = true;
+        } else if (type === "reveal") {
+          if (game.revealed) return;
+          const submitted = Object.keys(game.predictions).length;
+          if (submitted !== 2) return;
+          game.revealed = true;
+          changed = true;
+        } else if (type === "vote") {
+          if (!game.revealed) return;
+          if (game.votes[me.clientId]) return;
+          const votedFor = (payload as any)?.votedFor;
+          if (typeof votedFor !== "string") return;
+          if (!game.players.includes(votedFor)) return;
+          game.votes[me.clientId] = votedFor;
+          // When both have voted, set winner if majority agrees.
+          if (Object.keys(game.votes).length === 2) {
+            const tally: Record<string, number> = {};
+            for (const v of Object.values(game.votes)) {
+              tally[v] = (tally[v] || 0) + 1;
+            }
+            const top = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
+            if (top && top[1] > 1) {
+              game.winner = top[0];
+            }
+            // Tie (1-1) — leave winner null; round ends without a majority.
+          }
+          changed = true;
+        }
+      } else if (game.gameId === "care-package") {
+        const type = (payload as any)?.type;
+        if (!game.players.includes(me.clientId)) return;
+
+        if (type === "send_package") {
+          const rawMessage = (payload as any)?.message;
+          const rawType = (payload as any)?.packageType;
+          const message = sanitizeString(
+            typeof rawMessage === "string" ? rawMessage : "",
+            200,
+          );
+          const allowedTypes: CarePackageType[] = [
+            "encouragement", "love", "support", "surprise",
+          ];
+          const packageType: CarePackageType = allowedTypes.includes(rawType)
+            ? rawType
+            : "encouragement";
+          if (!message) return;
+          // Sending a new package resets the opened state — this is how
+          // "send one back" after receiving works from the client.
+          game.package = { sender: me.clientId, type: packageType, message };
+          game.opened = false;
+          changed = true;
+        } else if (type === "open_package") {
+          if (!game.package) return;
+          if (game.package.sender === me.clientId) return;   // sender can't open own
+          if (game.opened) return;
+          game.opened = true;
+          changed = true;
         }
       }
 
