@@ -23,11 +23,11 @@ export const isAdmin = (): boolean => {
  */
 function getCurrentUserEmail(): string | null {
   try {
-    // Get from Supabase session if available
-    const session = window.localStorage.getItem('sb-swoono-auth-token');
+    // Get from Supabase session if available (correct storage key)
+    const session = window.localStorage.getItem('swoono-auth');
     if (session) {
       const parsed = JSON.parse(session);
-      return parsed?.user?.email || null;
+      return parsed?.user?.email || parsed?.currentSession?.user?.email || null;
     }
 
     // Fallback to cached email method
