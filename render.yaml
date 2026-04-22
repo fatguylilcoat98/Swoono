@@ -12,3 +12,17 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_MONTHLY_PRICE_ID
+        sync: false
+      - key: STRIPE_YEARLY_PRICE_ID
+        sync: false
+      - key: CLIENT_URL
+        value: "https://swoono.onrender.com"
+      - key: VITE_STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: VITE_API_URL
+        value: "https://swoono.onrender.com"
