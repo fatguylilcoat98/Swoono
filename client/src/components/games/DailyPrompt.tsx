@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../lib/supabase";
+import { useRoomStore } from "../../state/roomStore";
 
 type DailyPrompt = {
   id: string;
@@ -19,12 +20,19 @@ type DailyPromptProps = {
   selfClientId: string;
 };
 
-export default function DailyPrompt({ roomCode }: DailyPromptProps) {
+export default function DailyPrompt({ roomCode, selfClientId }: DailyPromptProps) {
   const [todayPrompt, setTodayPrompt] = useState<DailyPrompt | null>(null);
   const [yesterdayPrompt, setYesterdayPrompt] = useState<DailyPrompt | null>(null);
   const [answer, setAnswer] = useState("");
   const [streak, setStreak] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Peer join order determines P1/P2. The server's Map preserves insertion
+  // order across reconnects, so this is stable for the life of the room.
+  const peers = useRoomStore((s) => s.peers);
+  const playerIdx = peers.findIndex((p) => p.clientId === selfClientId);
+  const isPlayer1 = playerIdx === 0;
+  const knownPosition = playerIdx === 0 || playerIdx === 1;
 
   const today = new Date().toISOString().split('T')[0];
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
@@ -148,14 +156,12 @@ export default function DailyPrompt({ roomCode }: DailyPromptProps) {
 
   const submitAnswer = async () => {
     if (!todayPrompt || !answer.trim()) return;
+    if (!knownPosition) return;   // can't safely submit until peer list resolves
 
     const supabase = getSupabase();
     if (!supabase) return;
 
     try {
-      // Determine which player we are (simplified - assumes 2 players)
-      const isPlayer1 = true; // TODO: Determine player position properly
-
       const updates = isPlayer1
         ? { p1_answer: answer.trim(), p1_submitted: true }
         : { p2_answer: answer.trim(), p2_submitted: true };
@@ -227,8 +233,16 @@ export default function DailyPrompt({ roomCode }: DailyPromptProps) {
     );
   }
 
-  const hasSubmitted = todayPrompt.p1_submitted; // TODO: Check correct player
+  const hasSubmitted = isPlayer1 ? todayPrompt.p1_submitted : todayPrompt.p2_submitted;
   const bothSubmitted = todayPrompt.p1_submitted && todayPrompt.p2_submitted;
+  const myAnswer = isPlayer1 ? todayPrompt.p1_answer : todayPrompt.p2_answer;
+  const partnerAnswer = isPlayer1 ? todayPrompt.p2_answer : todayPrompt.p1_answer;
+  const myYesterdayAnswer = yesterdayPrompt
+    ? (isPlayer1 ? yesterdayPrompt.p1_answer : yesterdayPrompt.p2_answer)
+    : null;
+  const partnerYesterdayAnswer = yesterdayPrompt
+    ? (isPlayer1 ? yesterdayPrompt.p2_answer : yesterdayPrompt.p1_answer)
+    : null;
 
   return (
     <div className={`bg-gradient-to-r ${gradients[dayOfWeek]} rounded-xl p-6 border border-white/10 mb-6`}>
@@ -276,10 +290,10 @@ export default function DailyPrompt({ roomCode }: DailyPromptProps) {
             </div>
             <button
               onClick={submitAnswer}
-              disabled={!answer.trim()}
+              disabled={!answer.trim() || !knownPosition}
               className="px-6 py-2 bg-swoono-accent text-black font-semibold rounded-lg hover:bg-swoono-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              Submit Answer
+              {knownPosition ? "Submit Answer" : "Waiting for room…"}
             </button>
           </div>
         </div>
@@ -302,11 +316,11 @@ export default function DailyPrompt({ roomCode }: DailyPromptProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-black/40 rounded-lg p-4 border border-white/10">
               <div className="text-swoono-dim text-xs mb-2">YOUR ANSWER</div>
-              <div className="text-swoono-ink">{todayPrompt.p1_answer}</div>
+              <div className="text-swoono-ink">{myAnswer}</div>
             </div>
             <div className="bg-black/40 rounded-lg p-4 border border-white/10">
               <div className="text-swoono-dim text-xs mb-2">PARTNER'S ANSWER</div>
-              <div className="text-swoono-ink">{todayPrompt.p2_answer}</div>
+              <div className="text-swoono-ink">{partnerAnswer}</div>
             </div>
           </div>
         </div>
@@ -322,11 +336,11 @@ export default function DailyPrompt({ roomCode }: DailyPromptProps) {
             <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="bg-black/20 rounded p-3">
                 <div className="text-xs text-swoono-dim mb-1">"{yesterdayPrompt.question}"</div>
-                <div className="text-sm text-swoono-ink">Your: {yesterdayPrompt.p1_answer}</div>
+                <div className="text-sm text-swoono-ink">Your: {myYesterdayAnswer}</div>
               </div>
               <div className="bg-black/20 rounded p-3">
                 <div className="text-xs text-swoono-dim mb-1">&nbsp;</div>
-                <div className="text-sm text-swoono-ink">Partner: {yesterdayPrompt.p2_answer}</div>
+                <div className="text-sm text-swoono-ink">Partner: {partnerYesterdayAnswer}</div>
               </div>
             </div>
           </details>
