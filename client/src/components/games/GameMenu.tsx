@@ -10,6 +10,7 @@ import { useMusicStore } from "../../state/musicStore";
 import { getPlaylist } from "../../lib/music/musicTracks";
 import DailyPrompt from "./DailyPrompt";
 import { isAdmin } from "../../lib/admin";
+import UpgradeModal from "../tiers/UpgradeModal";
 
 const TABS: { id: GameCategory; label: string }[] = [
   { id: "arcade", label: "Arcade" },
@@ -87,32 +88,10 @@ export default function GameMenu() {
       </p>
 
       {/* Upgrade Modal */}
-      {showUpgradeModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-          <div className="max-w-md w-full bg-swoono-bg border border-white/15 rounded-2xl p-6">
-            <div className="text-center">
-              <div className="text-4xl mb-4">🔓</div>
-              <h3 className="font-display text-xl text-swoono-ink mb-3">
-                Upgrade to Pro
-              </h3>
-              <p className="text-swoono-dim mb-6 leading-relaxed">
-                Unlock premium games, unlimited memory threads, scheduled care packages, and custom dares.
-              </p>
-              <div className="space-y-3">
-                <button className="w-full py-3 bg-swoono-accent text-black font-semibold rounded-lg hover:bg-swoono-accent/80 transition-colors">
-                  Upgrade Now
-                </button>
-                <button
-                  onClick={() => setShowUpgradeModal(false)}
-                  className="w-full py-2 text-swoono-dim hover:text-swoono-ink transition-colors"
-                >
-                  Maybe Later
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+      />
     </GlassPanel>
   );
 }

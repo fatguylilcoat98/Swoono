@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRoomStore } from "../../state/roomStore";
+import { getCachedUserEmail } from "../../lib/supabase";
 
 interface UpgradeModalProps {
   isOpen: boolean;
@@ -9,6 +11,11 @@ interface UpgradeModalProps {
 export default function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("yearly");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Get real user data
+  const clientId = useRoomStore((s) => s.clientId);
+  const roomCode = useRoomStore((s) => s.code);
+  const userEmail = getCachedUserEmail();
 
   const plans = {
     monthly: {
@@ -29,30 +36,61 @@ export default function UpgradeModal({ isOpen, onClose }: UpgradeModalProps) {
   const handleSubscribe = async () => {
     setIsLoading(true);
 
+    // Validate required data
+    if (!clientId) {
+      console.error('❌ Stripe checkout failed: No client ID');
+      alert('Please refresh the page and try again.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!userEmail) {
+      console.error('❌ Stripe checkout failed: No user email (please sign in)');
+      alert('Please sign in first to subscribe.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch('/api/stripe/create-checkout', {
+      // Use full URL for API call
+      const apiUrl = `${window.location.origin}/api/stripe/create-checkout`;
+      console.log('🛒 Creating Stripe checkout...', {
+        clientId,
+        roomCode,
+        priceId: plans[selectedPlan].priceId,
+        email: userEmail
+      });
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          clientId: 'test-client-id', // Replace with actual client ID
-          roomCode: 'TEST', // Replace with actual room code
+          clientId,
+          roomCode: roomCode || 'NONE',
           priceId: plans[selectedPlan].priceId,
-          email: 'user@example.com' // Replace with actual email
+          email: userEmail
         })
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
       const data = await response.json();
+      console.log('✅ Stripe checkout response:', data);
 
       if (data.url) {
+        console.log('🚀 Redirecting to Stripe checkout:', data.url);
         window.location.href = data.url;
       } else {
-        throw new Error('No checkout URL returned');
+        throw new Error('No checkout URL returned from server');
       }
     } catch (error) {
-      console.error('Subscription error:', error);
-      alert('Something went wrong. Please try again.');
+      console.error('❌ Stripe checkout error:', error);
+      alert(`Checkout failed: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsLoading(false);
     }

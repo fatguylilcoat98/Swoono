@@ -2,6 +2,7 @@
 // Add your email and your testers' emails here
 const ADMIN_EMAILS = [
   "stangman9898@gmail.com", // Chris Hughes (owner)
+  "stangman_98@yahoo.com", // Chris Hughes (alt)
   // Add your testers' emails here:
   // "tester1@example.com",
   // "tester2@example.com",
