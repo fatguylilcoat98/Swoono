@@ -37,17 +37,39 @@ export type MusicPlaylist = MusicTrack[];
  */
 export const PLAYLISTS: Record<"neutral" | "guy" | "girl", MusicPlaylist> = {
   neutral: [
-    // Example placeholder — replace with real URLs.
-    // {
-    //   id: "sample-1",
-    //   title: "Quiet Hour",
-    //   artist: "Example Artist",
-    //   url: "https://cdn.pixabay.com/audio/2023/.../quiet-hour.mp3",
-    //   attribution: "Music by Example from Pixabay",
-    // },
+    {
+      id: "swoono-state",
+      title: "The Swoono State",
+      artist: "Swoono Original",
+      url: "https://lhbktlxtycdbaumjooof.supabase.co/storage/v1/object/public/swoono-audio/The%20Swoono%20State.mp3",
+      attribution: "Original song by Swoono"
+    },
+    {
+      id: "post-it-memories",
+      title: "Post-it Memories",
+      artist: "Swoono Original",
+      url: "https://lhbktlxtycdbaumjooof.supabase.co/storage/v1/object/public/swoono-audio/Post-it%20Memories.mp3",
+      attribution: "Original song by Swoono"
+    }
   ],
-  guy: [],
-  girl: [],
+  guy: [
+    {
+      id: "arcade-war",
+      title: "Arcade War",
+      artist: "Swoono Original",
+      url: "https://lhbktlxtycdbaumjooof.supabase.co/storage/v1/object/public/swoono-audio/arcade%20war.mp3",
+      attribution: "Original song by Swoono"
+    }
+  ],
+  girl: [
+    {
+      id: "counting-miles",
+      title: "Counting the Miles",
+      artist: "Swoono Original",
+      url: "https://lhbktlxtycdbaumjooof.supabase.co/storage/v1/object/public/swoono-audio/Counting%20the%20Miles.mp3",
+      attribution: "Original song by Swoono"
+    }
+  ],
 };
 
 /** Returns a playlist, falling back to `neutral` if the mode has no tracks. */

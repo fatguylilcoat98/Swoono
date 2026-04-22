@@ -6,6 +6,7 @@ import {
   startSynthMusic,
   type SynthHandle,
 } from "../../lib/music/synthMusic";
+import { getPlaylist } from "../../lib/music/musicTracks";
 
 // MusicPlayer owns a single AudioContext for the lifetime of the room
 // session. Key hardening vs the prior version:
@@ -55,26 +56,14 @@ export default function MusicPlayer() {
   const [spotifyDialogOpen, setSpotifyDialogOpen] = useState(false);
   const [playerError, setPlayerError] = useState("");
 
-  // Load the playlist manifest from public/music.json on mount.
-  // If the file is missing, empty, or fails to parse, we stay in
-  // synth mode — that's the fallback, it always works.
+  // Load theme-based playlist from musicTracks.ts on mount and theme change.
+  // If empty, stay in synth mode — that's the fallback.
   useEffect(() => {
-    let cancelled = false;
-    fetch("/music.json", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (cancelled) return;
-        if (Array.isArray(data) && data.length > 0) {
-          setPlaylist(data);
-        }
-      })
-      .catch(() => {
-        /* synth fallback — nothing to do */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [setPlaylist]);
+    const themeMode = themeClass.includes("guy") ? "guy" :
+                     themeClass.includes("girl") ? "girl" : "neutral";
+    const playlist = getPlaylist(themeMode);
+    setPlaylist(playlist);
+  }, [themeClass, setPlaylist]);
 
   // Pick a synth preset based on the current theme mode — only on mount
   // or when theme changes. Don't override user's explicit mood pick.
@@ -160,7 +149,7 @@ export default function MusicPlayer() {
         p.catch((err) => {
           setPlayerError(
             `Track "${track.title}" failed to play (${err.name}). ` +
-              `Check the URL in music.json — falling back to synth.`,
+              `Check the URL in musicTracks.ts — falling back to synth.`,
           );
           // Fall back to synth so there's at least SOMETHING audible
           setPlaylist([]);
@@ -387,8 +376,7 @@ export default function MusicPlayer() {
                 ))}
               </div>
               <p className="text-[9px] text-swoono-dim/60 mb-3 leading-snug">
-                Add real tracks by editing{" "}
-                <code className="text-swoono-ink">public/music.json</code>.
+                Swoono Originals playing by theme.{" "}
                 Next button cycles moods in synth mode.
               </p>
             </>

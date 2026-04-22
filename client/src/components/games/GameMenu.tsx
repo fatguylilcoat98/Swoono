@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import GlassPanel from "../ui/GlassPanel";
 import {
   getGamesByCategory,
@@ -6,6 +6,8 @@ import {
   type GameDefinition,
 } from "../../lib/registries/gameRegistry";
 import { useRoomStore } from "../../state/roomStore";
+import { useMusicStore } from "../../state/musicStore";
+import { getPlaylist } from "../../lib/music/musicTracks";
 import DailyPrompt from "./DailyPrompt";
 
 const TABS: { id: GameCategory; label: string }[] = [
@@ -22,6 +24,15 @@ export default function GameMenu() {
   const gameInProgress = activeGame !== null;
   const roomCode = useRoomStore((s) => s.code);
   const clientId = useRoomStore((s) => s.clientId);
+  const setPlaylist = useMusicStore((s) => s.setPlaylist);
+
+  // Context-aware music switching based on active tab
+  useEffect(() => {
+    const musicContext = activeTab === "arcade" ? "guy" :
+                        activeTab === "couples" ? "girl" : "neutral";
+    const playlist = getPlaylist(musicContext);
+    setPlaylist(playlist);
+  }, [activeTab, setPlaylist]);
 
   return (
     <GlassPanel className="p-5">
