@@ -163,10 +163,17 @@ body {
   }
 }
 
-/* Prevent horizontal scrolling on mobile only */
+/* Prevent horizontal scrolling on mobile only.
+ * IMPORTANT: applying `overflow-x: hidden` to `html` creates a mobile-scroll
+ * lock in Android Chrome — when both html and body have an overflow property
+ * set, the browser gets confused about which is the scroll root and silently
+ * disables touch scrolling of the document (opening the admin panel briefly
+ * unlocks it by triggering a re-layout, which is how this bug was spotted).
+ * Apply to body only, and use `overflow-x: clip` so the browser clips
+ * horizontal overflow without making body into a scroll container. */
 @media (max-width: 768px) {
-  html, body {
-    overflow-x: hidden;
+  body {
+    overflow-x: clip;
     width: 100%;
   }
 }
