@@ -6,6 +6,11 @@
   color-scheme: dark;
 }
 
+html, body {
+  touch-action: pan-y;
+  overscroll-behavior: none;
+}
+
 html,
 body,
 #root {
@@ -159,13 +164,11 @@ body {
 
 /* Improve game board touch handling */
 .game-board {
-  touch-action: manipulation; /* Disable double-tap zoom */
   -webkit-user-select: none;
   user-select: none;
 }
 
 .game-cell {
-  touch-action: manipulation;
   cursor: pointer;
 }
 
