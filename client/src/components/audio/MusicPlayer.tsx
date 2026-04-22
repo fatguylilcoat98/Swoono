@@ -289,7 +289,7 @@ export default function MusicPlayer() {
 
       {showDetails && (
         <div
-          className="absolute top-full right-0 mt-2 min-w-[260px] p-4 rounded-lg bg-black/90 border border-white/10 backdrop-blur-lg z-50"
+          className="absolute top-full right-0 mt-2 min-w-[260px] p-4 rounded-lg bg-black/90 border border-white/10 backdrop-blur-lg z-[200]"
           style={{ boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }}
         >
           <div className="flex items-center justify-between mb-3">

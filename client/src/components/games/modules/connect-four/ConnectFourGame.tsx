@@ -106,7 +106,7 @@ export default function ConnectFourGame({
       <div className="flex-1 flex flex-col items-center justify-center gap-3 px-2">
         <TurnBanner game={game} mySide={mySide} />
 
-        <div className="flex flex-col gap-1 bg-white/5 border border-white/10 p-2 rounded-xl w-full max-w-sm">
+        <div className="flex flex-col gap-1 bg-white/5 border border-white/10 p-2 rounded-xl w-full max-w-xs mx-auto">
           {Array.from({ length: ROWS }, (_, row) => (
             <div key={row} className="flex gap-1">
               {Array.from({ length: COLS }, (_, col) => {
@@ -120,9 +120,9 @@ export default function ConnectFourGame({
                     type="button"
                     onClick={() => tappable && dropColumn(col)}
                     disabled={!tappable}
-                    className={`aspect-square flex-1 rounded-full border transition-all ${
+                    className={`aspect-square flex-1 min-w-0 rounded-full border transition-all ${
                       tappable
-                        ? "border-white/20 hover:border-swoono-accent/60 cursor-pointer"
+                        ? "border-white/20 hover:border-swoono-accent/60 cursor-pointer active:scale-95"
                         : "border-white/10 cursor-default"
                     } ${winning ? "ring-2 ring-white/80" : ""}`}
                     style={{
