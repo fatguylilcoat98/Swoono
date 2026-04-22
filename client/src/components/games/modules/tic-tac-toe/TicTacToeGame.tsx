@@ -27,12 +27,13 @@ export default function TicTacToeGame({
     if (!mySide) return;
 
     if (game.winner === mySide) {
-      onAwardPoints(10, "Tic-Tac-Toe win");
+      onAwardPoints(25, "Tic-Tac-Toe win");
       triggerEffect({
         effectId: "effect.game.win",
         fromClientId: selfClientId,
       });
     } else {
+      onAwardPoints(5, "Tic-Tac-Toe participation");
       triggerEffect({
         effectId: "effect.game.lose",
         fromClientId: selfClientId,

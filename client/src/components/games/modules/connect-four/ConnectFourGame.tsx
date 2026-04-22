@@ -30,12 +30,13 @@ export default function ConnectFourGame({
     if (!mySide) return;
 
     if (game.winner === mySide) {
-      onAwardPoints(15, "Connect Four win");
+      onAwardPoints(25, "Connect Four win");
       triggerEffect({
         effectId: "effect.game.win",
         fromClientId: selfClientId,
       });
     } else {
+      onAwardPoints(5, "Connect Four participation");
       triggerEffect({
         effectId: "effect.game.lose",
         fromClientId: selfClientId,

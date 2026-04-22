@@ -30,7 +30,7 @@ export default function LovingQuestGame({
   useEffect(() => {
     if (!game || game.winner !== "done" || awarded) return;
     setAwarded(true);
-    onAwardPoints(15, "loving-quest completed");
+    onAwardPoints(30, "loving-quest completed");
     triggerEffect({
       effectId: "effect.game.win",
       fromClientId: selfClientId,

@@ -32,12 +32,13 @@ export default function HangmanGame({
 
     // Cooperative — both players share the outcome.
     if (game.winner === "win") {
-      onAwardPoints(12, "Hangman win");
+      onAwardPoints(25, "Hangman win");
       triggerEffect({
         effectId: "effect.game.win",
         fromClientId: selfClientId,
       });
     } else {
+      onAwardPoints(5, "Hangman participation");
       triggerEffect({
         effectId: "effect.game.lose",
         fromClientId: selfClientId,

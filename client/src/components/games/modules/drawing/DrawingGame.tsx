@@ -22,7 +22,7 @@ export default function DrawingGame({
 
     if (game.phase === "complete") {
       // Award points for completion
-      onAwardPoints(15, "Drawing game completed");
+      onAwardPoints(30, "Drawing game completed");
       triggerEffect({
         effectId: "effect.game.win",
         fromClientId: selfClientId,
