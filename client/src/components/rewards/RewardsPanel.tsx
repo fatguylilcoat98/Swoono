@@ -4,6 +4,7 @@ import GlassPanel from "../ui/GlassPanel";
 import { usePointsStore } from "../../state/pointsStore";
 import { sendEffectToPeer } from "../../lib/registries/effectRegistry";
 import { useRoomStore } from "../../state/roomStore";
+import { useSubscriptionStore } from "../../state/subscriptionStore";
 
 type RewardTier = "sweet" | "savage" | "legendary" | "milestone";
 
@@ -80,6 +81,7 @@ export default function RewardsPanel() {
   const clientId = useRoomStore((s) => s.clientId);
   const peers = useRoomStore((s) => s.peers);
   const hasPartner = peers.some((p) => p.clientId !== clientId);
+  const { testingMode } = useSubscriptionStore();
 
   const [activeTab, setActiveTab] = useState<RewardTier>("sweet");
   const [sentToast, setSentToast] = useState<{
@@ -93,8 +95,15 @@ export default function RewardsPanel() {
       setTimeout(() => setSentToast(null), 1800);
       return;
     }
-    const ok = spend(reward.cost, `Redeemed ${reward.name}`);
-    if (!ok) return;
+
+    // In testing mode, bypass payment but still show the transaction
+    if (testingMode) {
+      console.log(`[TESTING] Would spend ${reward.cost} points for ${reward.name}`);
+    } else {
+      const ok = spend(reward.cost, `Redeemed ${reward.name}`);
+      if (!ok) return;
+    }
+
     sendEffectToPeer({
       effectId: reward.effectId,
       fromClientId: clientId,
@@ -102,23 +111,30 @@ export default function RewardsPanel() {
     });
     setSentToast({
       id: Date.now(),
-      text: `${reward.emoji} ${reward.name} sent!`,
+      text: `${reward.emoji} ${reward.name} sent!${testingMode ? " (TEST)" : ""}`,
     });
     setTimeout(() => setSentToast(null), 1800);
   }
 
-  const canAfford = (cost: number) => points >= cost;
-  const pointsNeeded = (cost: number) => Math.max(0, cost - points);
+  const canAfford = (cost: number) => testingMode || points >= cost;
+  const pointsNeeded = (cost: number) => testingMode ? 0 : Math.max(0, cost - points);
 
   return (
     <GlassPanel className={`p-5 relative ${activeTab === 'milestone' ? 'border-2 border-yellow-400' : ''}`}>
       <div className="flex items-baseline justify-between mb-4">
-        <h2 className="font-display text-lg text-swoono-ink">Reward Shop</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="font-display text-lg text-swoono-ink">Reward Shop</h2>
+          {testingMode && (
+            <span className="bg-yellow-500 text-black px-1.5 py-0.5 rounded text-xs font-bold">
+              TEST
+            </span>
+          )}
+        </div>
         <span
           className="text-2xl font-bold font-mono"
           style={{ color: TIER_META[activeTab].accent }}
         >
-          {points.toLocaleString()} pts
+          {points.toLocaleString()} pts{testingMode && " ∞"}
         </span>
       </div>
 

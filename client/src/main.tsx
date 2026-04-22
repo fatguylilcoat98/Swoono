@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import "./styles/globals.css";
 import { registerGameEffects } from "./lib/effects/registerGameEffects";
+import "./lib/testing"; // Initialize testing environment
 
 // Wire win/lose effect handlers into the effect registry before mount.
 registerGameEffects();
