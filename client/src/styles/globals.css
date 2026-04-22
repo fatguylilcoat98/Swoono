@@ -58,7 +58,7 @@ body {
   background: rgb(var(--swoono-bg));
   color: rgb(var(--swoono-ink));
   -webkit-font-smoothing: antialiased;
-  overscroll-behavior: none;
+  overscroll-behavior: auto;
   font-family: Inter, system-ui, sans-serif;
   transition: background-color 0.6s ease;
 }
