@@ -2,12 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body, #root {
+  touch-action: pan-y !important;
+  overscroll-behavior: none !important;
+  -ms-touch-action: pan-y !important;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 :root {
   color-scheme: dark;
 }
 
 html, body {
-  touch-action: pan-y;
   overscroll-behavior: none;
 }
 

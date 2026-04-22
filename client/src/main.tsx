@@ -4,6 +4,11 @@ import App from "./App";
 import "./styles/globals.css";
 import { registerGameEffects } from "./lib/effects/registerGameEffects";
 
+// Permanent Android scroll fix
+document.addEventListener('touchstart', () => {},
+  { passive: true })
+document.documentElement.style.touchAction = 'pan-y'
+
 // Wire win/lose effect handlers into the effect registry before mount.
 registerGameEffects();
 
