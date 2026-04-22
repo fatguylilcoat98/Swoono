@@ -12,6 +12,13 @@ body,
   min-height: 100%;
 }
 
+/* Kill pull-to-refresh globally */
+html, body {
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ------------------------------------------------------------------------- *
  *  Theme tokens
  *  Each mode sets the full palette as CSS custom properties. Tailwind's

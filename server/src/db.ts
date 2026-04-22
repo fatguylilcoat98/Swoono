@@ -98,6 +98,19 @@ export type PeerLocationRow = {
   updated_at: string;
 };
 
+export type GameSessionRow = {
+  id: string;
+  room_code: string;
+  game_type: string;
+  player1_id: string | null;
+  player2_id: string | null;
+  game_state: Record<string, unknown>;
+  current_turn: string | null;
+  status: "waiting" | "active" | "finished";
+  created_at: string;
+  updated_at: string;
+};
+
 // --- Room operations ------------------------------------------------------
 
 /**
@@ -383,4 +396,64 @@ export function haversineMeters(
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+// --- Game sessions (live game state) -------------------------------------
+
+export async function createGameSession(
+  roomCode: string,
+  gameType: string,
+  player1Id?: string,
+): Promise<GameSessionRow> {
+  const { data, error } = await db()
+    .from("game_sessions")
+    .insert({
+      room_code: roomCode,
+      game_type: gameType,
+      player1_id: player1Id || null,
+      status: "waiting",
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data as GameSessionRow;
+}
+
+export async function getActiveGameSession(
+  roomCode: string,
+): Promise<GameSessionRow | null> {
+  const { data, error } = await db()
+    .from("game_sessions")
+    .select("*")
+    .eq("room_code", roomCode)
+    .in("status", ["waiting", "active"])
+    .order("created_at", { ascending: false })
+    .maybeSingle();
+  if (error) throw error;
+  return data as GameSessionRow | null;
+}
+
+export async function updateGameSession(
+  sessionId: string,
+  updates: Partial<GameSessionRow>,
+): Promise<void> {
+  const { error } = await db()
+    .from("game_sessions")
+    .update(updates)
+    .eq("id", sessionId);
+  if (error) throw error;
+}
+
+export async function finishGameSession(
+  sessionId: string,
+  finalState: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await db()
+    .from("game_sessions")
+    .update({
+      game_state: finalState,
+      status: "finished",
+    })
+    .eq("id", sessionId);
+  if (error) throw error;
 }

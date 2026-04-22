@@ -46,9 +46,10 @@ export function getSupabase(): SupabaseClient | null {
   _client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       persistSession: true,
+      storageKey: 'swoono-auth',
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      storageKey: "swoono:auth",
     },
   });
   return _client;
@@ -67,7 +68,7 @@ export function isAuthConfigured(): boolean {
 export function getCachedUserId(): string | null {
   if (!isAuthConfigured()) return null;
   try {
-    const raw = localStorage.getItem("swoono:auth");
+    const raw = localStorage.getItem("swoono-auth");
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     const userId =
@@ -84,7 +85,7 @@ export function getCachedUserId(): string | null {
 export function getCachedUserEmail(): string | null {
   if (!isAuthConfigured()) return null;
   try {
-    const raw = localStorage.getItem("swoono:auth");
+    const raw = localStorage.getItem("swoono-auth");
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     const email =
