@@ -92,3 +92,4 @@ In your Render dashboard, set these environment variables:
 - **Animations (existing reward effects):** the reward system dispatches an `EffectPayload` via `effectRegistry.trigger(effectId, context)`. Drop each existing animation component behind one registered effect id.
 - **Music / audio reactive:** `client/src/lib/registries/audioAdapter.ts` currently runs a `SimulatedBeat` provider. Implement the `AudioProvider` interface (`start`, `stop`, `onFrame(beat)`) with a real source (Spotify SDK, mic input, etc.) and swap the default provider.
 - **Persistence:** All data is persisted in Supabase (rooms, notes, points, games, rewards, locations). No data is lost on server restarts.
+# Version bump test
