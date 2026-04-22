@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { isAdmin } from "../lib/admin";
 
 export type SubscriptionPlan = "free" | "pro";
 export type SubscriptionStatus = "inactive" | "active" | "past_due" | "canceled";
@@ -9,47 +10,47 @@ type SubscriptionState = {
   isLoading: boolean;
   currentPeriodEnd: string | null;
 
-  // Testing overrides
-  testingMode: boolean;
-  testPlan: SubscriptionPlan;
+  // Admin overrides
+  adminMode: boolean;
+  adminPlan: SubscriptionPlan;
 
   // Actions
   setPlan: (plan: SubscriptionPlan, status: SubscriptionStatus) => void;
-  setTestingMode: (enabled: boolean, testPlan?: SubscriptionPlan) => void;
+  setAdminMode: (enabled: boolean, adminPlan?: SubscriptionPlan) => void;
   fetchSubscription: (clientId: string) => Promise<void>;
 };
 
-// Check if we're in testing mode from environment
-const isTestingMode = import.meta.env.VITE_TESTER_MODE === "true";
+// Check if current user is admin
+const adminAccess = isAdmin();
 
 export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
-  plan: isTestingMode ? "pro" : "free",
-  status: isTestingMode ? "active" : "inactive",
+  plan: adminAccess ? "pro" : "free",
+  status: adminAccess ? "active" : "inactive",
   isLoading: false,
   currentPeriodEnd: null,
-  testingMode: isTestingMode,
-  testPlan: "pro",
+  adminMode: adminAccess,
+  adminPlan: "pro",
 
   setPlan: (plan, status) => {
     set({ plan, status, isLoading: false });
   },
 
-  setTestingMode: (enabled, testPlan = "pro") => {
+  setAdminMode: (enabled, adminPlan = "pro") => {
     set({
-      testingMode: enabled,
-      testPlan,
-      plan: enabled ? testPlan : "free",
+      adminMode: enabled,
+      adminPlan,
+      plan: enabled ? adminPlan : "free",
       status: enabled ? "active" : "inactive"
     });
   },
 
   fetchSubscription: async (clientId: string) => {
-    const { testingMode, testPlan } = get();
+    const { adminMode, adminPlan } = get();
 
-    // In testing mode, always return PRO
-    if (testingMode) {
+    // In admin mode, always return PRO
+    if (adminMode) {
       set({
-        plan: testPlan,
+        plan: adminPlan,
         status: "active",
         isLoading: false,
         currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -82,20 +83,20 @@ export const useSubscriptionStore = create<SubscriptionState>((set, get) => ({
 
 // Helper functions for checking access
 export const hasProAccess = () => {
-  const { plan, status, testingMode, testPlan } = useSubscriptionStore.getState();
+  const { plan, status, adminMode, adminPlan } = useSubscriptionStore.getState();
 
-  if (testingMode) {
-    return testPlan === "pro";
+  if (adminMode) {
+    return adminPlan === "pro";
   }
 
   return plan === "pro" && status === "active";
 };
 
 export const canAccessReward = (cost: number) => {
-  const { testingMode } = useSubscriptionStore.getState();
+  const { adminMode } = useSubscriptionStore.getState();
 
-  // In testing mode, all rewards are accessible regardless of cost
-  if (testingMode) {
+  // In admin mode, all rewards are accessible regardless of cost
+  if (adminMode) {
     return true;
   }
 

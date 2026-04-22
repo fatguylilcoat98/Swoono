@@ -31,10 +31,29 @@ export default function RoomEntry({ onJoined, onBack }: RoomEntryProps) {
   });
   const [code, setCode] = useState("");
   const [generatedCode] = useState(() => makeRoomCode());
+  const [partnerEmail, setPartnerEmail] = useState("");
+  const [inviteSent, setInviteSent] = useState(false);
 
   const joining = useRoomStore((s) => s.joining);
   const joinError = useRoomStore((s) => s.joinError);
   const join = useRoomStore((s) => s.join);
+
+  function handleSendInvite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!partnerEmail.trim()) return;
+
+    const inviteMessage = `Join me on Swoono! 💕\n\nDownload the app and enter room code: ${generatedCode}\nhttps://swoono.onrender.com\n\n- ${name || 'Your partner'}`;
+
+    // Copy to clipboard as fallback (email sending would require backend)
+    try {
+      navigator.clipboard.writeText(inviteMessage);
+      setInviteSent(true);
+      setTimeout(() => setInviteSent(false), 3000);
+    } catch {
+      // Fallback for browsers that don't support clipboard API
+      alert(`Send this invite to ${partnerEmail}:\n\n${inviteMessage}`);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -161,6 +180,32 @@ export default function RoomEntry({ onJoined, onBack }: RoomEntryProps) {
                   <span className="text-swoono-ink">Join a room</span> on
                   their phone and enter this code.
                 </p>
+
+                {/* Partner Email Invite */}
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <p className="text-xs uppercase tracking-widest text-swoono-dim mb-3">
+                    Or invite by email
+                  </p>
+                  <form onSubmit={handleSendInvite} className="space-y-3">
+                    <input
+                      type="email"
+                      value={partnerEmail}
+                      onChange={(e) => setPartnerEmail(e.target.value)}
+                      placeholder="partner@example.com"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-swoono-ink placeholder:text-swoono-dim/60 focus:outline-none focus:border-swoono-accent/60 focus:bg-white/10 transition-colors"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!partnerEmail.trim() || inviteSent}
+                      className="w-full py-2 rounded-xl bg-white/10 border border-white/10 text-swoono-ink text-xs uppercase tracking-widest hover:bg-white/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {inviteSent ? "Invite Copied to Clipboard!" : "Copy Invite Message"}
+                    </button>
+                  </form>
+                  <p className="text-[10px] text-swoono-dim/60 mt-2 leading-snug">
+                    Creates a message with the room code you can send via your favorite app.
+                  </p>
+                </div>
               </div>
             ) : (
               <div>

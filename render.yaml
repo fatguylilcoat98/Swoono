@@ -26,5 +26,7 @@ services:
         sync: false
       - key: VITE_API_URL
         value: "https://swoono.onrender.com"
-      - key: VITE_TESTER_MODE
-        value: "false"
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false

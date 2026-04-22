@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../../../lib/supabase";
 import type { GameContextProps } from "../../../../lib/registries/gameRegistry";
+import { isAdmin } from "../../../../lib/admin";
 
 type CarePackage = {
   id: string;
@@ -36,9 +37,9 @@ export default function CarePackageGame({
   const [packagesThisMonth, setPackagesThisMonth] = useState(0);
 
   const emojiOptions = ["❤️", "🌟", "🎉", "☀️", "🌈", "💐", "🍰", "🎁", "🧸", "💌", "🌙", "✨"];
-  // TESTER MODE — bypasses all paywalls
-  const TESTER_MODE = import.meta.env.VITE_TESTER_MODE === 'true';
-  const isPremium = TESTER_MODE; // TODO: Get from user state when not testing
+  // ADMIN ACCESS — bypasses all paywalls for authorized users
+  const adminAccess = isAdmin();
+  const isPremium = adminAccess; // TODO: Get from user state when not admin
   const monthlyLimit = 3;
 
   // Load packages on mount

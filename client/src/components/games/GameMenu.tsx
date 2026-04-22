@@ -9,6 +9,7 @@ import { useRoomStore } from "../../state/roomStore";
 import { useMusicStore } from "../../state/musicStore";
 import { getPlaylist } from "../../lib/music/musicTracks";
 import DailyPrompt from "./DailyPrompt";
+import { isAdmin } from "../../lib/admin";
 
 const TABS: { id: GameCategory; label: string }[] = [
   { id: "arcade", label: "Arcade" },
@@ -127,10 +128,9 @@ function GameCard({
   onPlay: () => void;
   onUpgrade: () => void;
 }) {
-  // TESTER MODE — bypasses all paywalls
-  // Set VITE_TESTER_MODE=true in .env to unlock all
-  const TESTER_MODE = import.meta.env.VITE_TESTER_MODE === 'true';
-  const locked = game.tier > 0 && !TESTER_MODE;
+  // ADMIN ACCESS — bypasses all paywalls for authorized users
+  const adminAccess = isAdmin();
+  const locked = game.tier > 0 && !adminAccess;
   const available = game.status === "ready" && !locked && !disabled;
   const clickHandler = () => {
     if (available) {
@@ -155,9 +155,9 @@ function GameCard({
     >
       <div className="flex justify-between items-start mb-2">
         <div className="text-2xl leading-none">{game.emoji}</div>
-        {game.tier === 0 || TESTER_MODE ? (
+        {game.tier === 0 || adminAccess ? (
           <span className="bg-green-500/20 text-green-400 text-[9px] uppercase tracking-wider font-semibold px-2 py-1 rounded">
-            {TESTER_MODE && game.tier > 0 ? "TEST" : "FREE"}
+            {adminAccess && game.tier > 0 ? "ADMIN" : "FREE"}
           </span>
         ) : (
           <span className="bg-amber-500/20 text-amber-400 text-[9px] uppercase tracking-wider font-semibold px-2 py-1 rounded flex items-center gap-1">

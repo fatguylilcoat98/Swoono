@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGameSession } from "../../../../hooks/useGameSession";
 import type { GameContextProps } from "../../../../lib/registries/gameRegistry";
+import { isAdmin } from "../../../../lib/admin";
 
 type DareTier = 'easy' | 'medium' | 'spicy';
 
@@ -74,9 +75,9 @@ export default function DailyDareChainGame({
   }
 
   const state = gameState.game_state as DailyDareState;
-  // TESTER MODE — bypasses all paywalls
-  const TESTER_MODE = import.meta.env.VITE_TESTER_MODE === 'true';
-  const isPremium = state.is_premium || TESTER_MODE;
+  // ADMIN ACCESS — bypasses all paywalls for authorized users
+  const adminAccess = isAdmin();
+  const isPremium = state.is_premium || adminAccess;
 
   const sendDare = async (tier: DareTier, dareText?: string) => {
     const dares = tier === 'easy' ? EASY_DARES : tier === 'medium' ? MEDIUM_DARES : SPICY_DARES;

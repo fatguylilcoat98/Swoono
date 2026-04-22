@@ -6,11 +6,12 @@ import RoomShell from "./components/room/RoomShell";
 import ModeSelector from "./components/theme/ModeSelector";
 import ThemeProvider from "./components/theme/ThemeProvider";
 import EffectOverlay from "./components/effects/EffectOverlay";
-import TestingPanel from "./components/testing/TestingPanel";
 import InstallPrompt from "./components/ui/InstallPrompt";
+import AdminPanel from "./components/admin/AdminPanel";
 import { useRoomStore } from "./state/roomStore";
 import { useThemeStore } from "./state/themeStore";
 import { getSupabase } from "./lib/supabase";
+import { getClientId } from "./lib/clientId";
 
 type Stage = "mode" | "landing" | "entry" | "room";
 
@@ -19,6 +20,7 @@ export default function App() {
   const [stage, setStage] = useState<Stage>(hasChosen ? "landing" : "mode");
   const code = useRoomStore((s) => s.code);
   const leave = useRoomStore((s) => s.leave);
+  const join = useRoomStore((s) => s.join);
 
   // Prevent pull-to-refresh on mobile browsers
   useEffect(() => {
@@ -46,22 +48,53 @@ export default function App() {
     };
   }, []);
 
-  // Auth persistence listener
+  // Auth persistence listener with auto-room loading
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) return;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
         console.log('Session active:', session.user.id);
+
+        // Auto-load user's existing room
+        const clientId = getClientId(); // This will be user_${session.user.id}
+
+        try {
+          const { data: existingRooms } = await supabase
+            .from('rooms')
+            .select('code')
+            .contains('owner_client_ids', [clientId])
+            .order('last_activity_at', { ascending: false })
+            .limit(1);
+
+          if (existingRooms && existingRooms.length > 0) {
+            // Auto-join their existing room
+            const roomCode = existingRooms[0].code;
+            console.log('Auto-joining existing room:', roomCode);
+
+            // Get display name from localStorage or use default
+            const displayName = localStorage.getItem("swoono:displayName") || "You";
+
+            const joinResult = await join(roomCode, displayName);
+            if (joinResult) {
+              setStage("room");
+            }
+          }
+        } catch (error) {
+          console.warn('Error loading existing room:', error);
+          // Continue to normal room entry flow
+        }
       }
       if (event === 'SIGNED_OUT') {
         console.log('User signed out');
+        // Return to landing if they sign out
+        setStage("landing");
       }
     });
 
     return () => subscription?.unsubscribe();
-  }, []);
+  }, [join]);
 
   const handleLeave = () => {
     leave();
@@ -90,8 +123,8 @@ export default function App() {
           )}
         </AnimatePresence>
         <EffectOverlay />
-        <TestingPanel />
         <InstallPrompt />
+        <AdminPanel />
         <VersionBadge />
       </div>
     </ThemeProvider>

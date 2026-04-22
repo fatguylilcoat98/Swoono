@@ -81,7 +81,7 @@ export default function RewardsPanel() {
   const clientId = useRoomStore((s) => s.clientId);
   const peers = useRoomStore((s) => s.peers);
   const hasPartner = peers.some((p) => p.clientId !== clientId);
-  const { testingMode } = useSubscriptionStore();
+  const { adminMode } = useSubscriptionStore();
 
   const [activeTab, setActiveTab] = useState<RewardTier>("sweet");
   const [sentToast, setSentToast] = useState<{
@@ -96,9 +96,9 @@ export default function RewardsPanel() {
       return;
     }
 
-    // In testing mode, bypass payment but still show the transaction
-    if (testingMode) {
-      console.log(`[TESTING] Would spend ${reward.cost} points for ${reward.name}`);
+    // In admin mode, bypass payment but still show the transaction
+    if (adminMode) {
+      console.log(`[ADMIN] Would spend ${reward.cost} points for ${reward.name}`);
     } else {
       const ok = spend(reward.cost, `Redeemed ${reward.name}`);
       if (!ok) return;
@@ -111,22 +111,22 @@ export default function RewardsPanel() {
     });
     setSentToast({
       id: Date.now(),
-      text: `${reward.emoji} ${reward.name} sent!${testingMode ? " (TEST)" : ""}`,
+      text: `${reward.emoji} ${reward.name} sent!${adminMode ? " (ADMIN)" : ""}`,
     });
     setTimeout(() => setSentToast(null), 1800);
   }
 
-  const canAfford = (cost: number) => testingMode || points >= cost;
-  const pointsNeeded = (cost: number) => testingMode ? 0 : Math.max(0, cost - points);
+  const canAfford = (cost: number) => adminMode || points >= cost;
+  const pointsNeeded = (cost: number) => adminMode ? 0 : Math.max(0, cost - points);
 
   return (
     <GlassPanel className={`p-5 relative ${activeTab === 'milestone' ? 'border-2 border-yellow-400' : ''}`}>
       <div className="flex items-baseline justify-between mb-4">
         <div className="flex items-center gap-2">
           <h2 className="font-display text-lg text-swoono-ink">Reward Shop</h2>
-          {testingMode && (
+          {adminMode && (
             <span className="bg-yellow-500 text-black px-1.5 py-0.5 rounded text-xs font-bold">
-              TEST
+              ADMIN
             </span>
           )}
         </div>
@@ -134,7 +134,7 @@ export default function RewardsPanel() {
           className="text-2xl font-bold font-mono"
           style={{ color: TIER_META[activeTab].accent }}
         >
-          {points.toLocaleString()} pts{testingMode && " ∞"}
+          {points.toLocaleString()} pts{adminMode && " ∞"}
         </span>
       </div>
 

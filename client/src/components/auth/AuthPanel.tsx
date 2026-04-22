@@ -5,11 +5,10 @@ import {
   getCachedUserEmail,
 } from "../../lib/supabase";
 
-// Collapsible email+password auth panel. Renders on the room-entry
-// screen above the anonymous quick-join form. When Supabase is not
+// Required email+password auth panel. Renders on the room-entry
+// screen - authentication is required to use Swoono. When Supabase is not
 // configured (no VITE_SUPABASE_URL env var on Render), the whole
-// component quietly renders null and the anonymous flow is the only
-// path. When configured, users can:
+// component renders null and the app won't work. When configured, users can:
 //
 //   - Sign up with email + password (Supabase sends a confirmation
 //     email if email confirmation is enabled in the project)
@@ -17,9 +16,8 @@ import {
 //   - See their signed-in email + sign out
 //
 // After sign-in or sign-out we reload the page so that readClientId()
-// re-runs and picks up the new `user_*` or anonymous clientId. This
-// is simpler than propagating the clientId reactively through the
-// whole store and covers the one moment that actually matters.
+// re-runs and picks up the new `user_*` clientId. This ensures their
+// rooms, points, and game history persist across devices forever.
 
 type AuthTab = "signin" | "signup";
 
@@ -34,7 +32,6 @@ export default function AuthPanel() {
   const [currentEmail, setCurrentEmail] = useState<string | null>(
     () => getCachedUserEmail(),
   );
-  const [open, setOpen] = useState(false);
 
   // Re-read cached session on mount in case it was refreshed
   useEffect(() => {
@@ -138,95 +135,86 @@ export default function AuthPanel() {
 
   return (
     <div className="mb-5 border border-white/10 rounded-xl overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
-      >
-        <div>
-          <p className="text-xs uppercase tracking-widest text-swoono-dim">
-            Optional — sign in
-          </p>
-          <p className="text-[11px] text-swoono-dim/70 mt-0.5">
-            Your rooms follow you across devices
-          </p>
-        </div>
-        <span className="text-swoono-dim text-sm">{open ? "−" : "+"}</span>
-      </button>
+      <div className="px-4 py-3 border-b border-white/10">
+        <p className="text-xs uppercase tracking-widest text-swoono-dim">
+          Required — Create Account
+        </p>
+        <p className="text-[11px] text-swoono-dim/70 mt-0.5">
+          Your rooms, points, and games are saved forever
+        </p>
+      </div>
 
-      {open && (
-        <div className="p-4 border-t border-white/10">
-          <div className="flex gap-2 mb-3">
-            <button
-              type="button"
-              onClick={() => setTab("signin")}
-              className={`flex-1 text-[11px] uppercase tracking-widest py-2 rounded border ${
-                tab === "signin"
-                  ? "border-swoono-accent bg-swoono-accent/10 text-swoono-accent"
-                  : "border-white/10 text-swoono-dim hover:border-white/30"
-              }`}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("signup")}
-              className={`flex-1 text-[11px] uppercase tracking-widest py-2 rounded border ${
-                tab === "signup"
-                  ? "border-swoono-accent bg-swoono-accent/10 text-swoono-accent"
-                  : "border-white/10 text-swoono-dim hover:border-white/30"
-              }`}
-            >
-              Sign up
-            </button>
-          </div>
-
-          <form
-            onSubmit={tab === "signin" ? handleSignIn : handleSignUp}
-            className="space-y-3"
+      <div className="p-4">
+        <div className="flex gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => setTab("signin")}
+            className={`flex-1 text-[11px] uppercase tracking-widest py-2 rounded border ${
+              tab === "signin"
+                ? "border-swoono-accent bg-swoono-accent/10 text-swoono-accent"
+                : "border-white/10 text-swoono-dim hover:border-white/30"
+            }`}
           >
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              autoComplete="email"
-              className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-swoono-ink placeholder:text-swoono-dim/60 focus:outline-none focus:border-swoono-accent/60"
-            />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="password (6+ characters)"
-              required
-              minLength={6}
-              autoComplete={
-                tab === "signin" ? "current-password" : "new-password"
-              }
-              className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-swoono-ink placeholder:text-swoono-dim/60 focus:outline-none focus:border-swoono-accent/60"
-            />
-            {err && <p className="text-xs text-red-400">{err}</p>}
-            {msg && <p className="text-xs text-swoono-accent">{msg}</p>}
-            <button
-              type="submit"
-              disabled={busy}
-              className="w-full py-2 rounded bg-swoono-accent/20 border border-swoono-accent/50 text-swoono-ink text-xs uppercase tracking-widest disabled:opacity-50"
-            >
-              {busy
-                ? "…"
-                : tab === "signin"
-                  ? "Sign in"
-                  : "Create account"}
-            </button>
-          </form>
-
-          <p className="text-[10px] text-swoono-dim/60 mt-3 leading-snug">
-            Optional. You can still skip this and use an anonymous room
-            code — but signed-in rooms persist across devices and
-            reinstalls.
-          </p>
+            Sign in
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("signup")}
+            className={`flex-1 text-[11px] uppercase tracking-widest py-2 rounded border ${
+              tab === "signup"
+                ? "border-swoono-accent bg-swoono-accent/10 text-swoono-accent"
+                : "border-white/10 text-swoono-dim hover:border-white/30"
+            }`}
+          >
+            Sign up
+          </button>
         </div>
-      )}
+
+        <form
+          onSubmit={tab === "signin" ? handleSignIn : handleSignUp}
+          className="space-y-3"
+        >
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            required
+            autoComplete="email"
+            className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-swoono-ink placeholder:text-swoono-dim/60 focus:outline-none focus:border-swoono-accent/60"
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="password (6+ characters)"
+            required
+            minLength={6}
+            autoComplete={
+              tab === "signin" ? "current-password" : "new-password"
+            }
+            className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-swoono-ink placeholder:text-swoono-dim/60 focus:outline-none focus:border-swoono-accent/60"
+          />
+          {err && <p className="text-xs text-red-400">{err}</p>}
+          {msg && <p className="text-xs text-swoono-accent">{msg}</p>}
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full py-2 rounded bg-swoono-accent/20 border border-swoono-accent/50 text-swoono-ink text-xs uppercase tracking-widest disabled:opacity-50"
+          >
+            {busy
+              ? "…"
+              : tab === "signin"
+                ? "Sign in"
+                : "Create account"}
+          </button>
+        </form>
+
+        <p className="text-[10px] text-swoono-dim/60 mt-3 leading-snug">
+          Create a free account to save your room, points, and game history forever.
+          Your progress follows you across all your devices.
+        </p>
+      </div>
     </div>
   );
 }
