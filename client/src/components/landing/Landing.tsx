@@ -12,7 +12,7 @@ export default function Landing({ onEnter }: LandingProps) {
 
   return (
     <motion.div
-      className="relative h-dvh flex flex-col items-center justify-center overflow-hidden"
+      className="relative min-h-dvh flex flex-col items-center justify-center"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
